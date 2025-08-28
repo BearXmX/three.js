@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom'
 import { Button, ConfigProvider, Space, theme } from 'antd'
 import Enhance from './enhance.tsx'
 
@@ -177,13 +177,22 @@ createRoot(document.getElementById('root')!).render(
         },
       }}
     >
-      <BrowserRouter>
-        <Routes>
-          {links.map(route => (
-            <Route key={route.path} path={route.path} element={route.element} />
-          ))}
-        </Routes>
-      </BrowserRouter>
+      {
+        import.meta.env.PROD ? <HashRouter>
+          <Routes>
+            {links.map(route => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
+          </Routes>
+        </HashRouter> : <BrowserRouter>
+          <Routes>
+            {links.map(route => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
+          </Routes>
+        </BrowserRouter>
+      }
+
     </ConfigProvider>
   </StrictMode>
 )

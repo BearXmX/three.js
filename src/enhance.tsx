@@ -19,7 +19,7 @@ const Enhance: React.FC<EnhancePropsType> = (props) => {
 
   return <>
     <Select
-      value={window.location.pathname}
+      value={import.meta.env.PROD ? window.location.hash.replace('#', '') : window.location.pathname}
       style={{ width: 120, position: 'absolute', top: 10, left: 10 }}
       options={routes.map((item, index) => ({
         value: item.path,

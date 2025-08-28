@@ -140,13 +140,13 @@ const SolarSystem: React.FC = () => {
       );
       orbit.add(minorAxis);
     };
-
+    const prefix = import.meta.env.PROD ? '/three.js' : ''
     // 加载地球（开启接收阴影）
     const loadEarth = () => {
       const loader = new GLTFLoader();
 
       loader.load(
-        '/models/earth/scene.gltf',
+        prefix + '/models/earth/scene.gltf',
         (gltf) => {
           const earth = gltf.scene;
           earthRef.current = earth;
@@ -154,7 +154,7 @@ const SolarSystem: React.FC = () => {
           // 地球纹理
           const textureLoader = new THREE.TextureLoader();
           const earthTexture = textureLoader.load(
-            '/models/earth/textures/Material.002_diffuse.jpeg'
+            prefix + '/models/earth/textures/Material.002_diffuse.jpeg'
           );
 
           earth.traverse((child) => {

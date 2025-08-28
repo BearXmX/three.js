@@ -68,11 +68,13 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
     // 控制器自动旋转
     // controls.autoRotate = true
 
+    const prefix = import.meta.env.PROD ? '/three.js' : ''
+
     // 绘制地面
     {
       const planeSize = 40;
       const loader = new THREE.TextureLoader();
-      const texture = loader.load('/checker.png');
+      const texture = loader.load(prefix + '/checker.png');
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.magFilter = THREE.NearestFilter;
