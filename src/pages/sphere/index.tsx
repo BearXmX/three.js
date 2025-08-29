@@ -50,6 +50,7 @@ const Sphere: React.FC<SpherePropsType> = (props) => {
 
     const sphere = new THREE.Mesh(geometry, material);
 
+    console.log(sphere.geometry.attributes);
 
     sphere.rotation.z = (Math.PI / 180) * 23.5;
 

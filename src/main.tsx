@@ -18,6 +18,8 @@ import MockTank from './pages/mock-tank/index.tsx'
 import SolarSystem from './pages/solar-system/index.tsx'
 import CameraFollow from './pages/camera-follow/index.tsx'
 import HauntdHouse from './pages/haunted-house/index.tsx'
+import Star from './pages/star-river/index.tsx'
+import StarRiver from './pages/star-river/index.tsx'
 
 export const links = [
   {
@@ -161,6 +163,17 @@ export const links = [
     element: (
       <Enhance>
         <HauntdHouse key={'/haunted-house'}></HauntdHouse>
+      </Enhance>
+    ),
+  },
+  {
+    name: '星河',
+    path: '/star-river',
+    content: `星河`
+    ,
+    element: (
+      <Enhance>
+        <StarRiver key={'/star-river'}></StarRiver>
       </Enhance>
     ),
   },
