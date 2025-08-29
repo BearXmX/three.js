@@ -166,6 +166,8 @@ export const links = [
   },
 ]
 
+window.$$prefix = import.meta.env.PROD ? import.meta.env.VITE_APP_GITHUB_PROJECT_PATH : ''
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ConfigProvider

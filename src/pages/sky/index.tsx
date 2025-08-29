@@ -79,9 +79,9 @@ const Sky: React.FC<SkyPropsType> = (props) => {
     const rgbeLoader = new RGBELoader()
 
 
-    const prefix = import.meta.env.PROD ? '/three.js' : ''
 
-    rgbeLoader.load(prefix + '/hdrs/sky.hdr', (texture) => {
+
+    rgbeLoader.load(window.$$prefix + '/hdrs/sky.hdr', (texture) => {
       texture.mapping = THREE.EquirectangularReflectionMapping
       scene.background = texture
       scene.environment = texture
@@ -108,7 +108,7 @@ const Sky: React.FC<SkyPropsType> = (props) => {
     // 加载模型
     const gltfLoader = new GLTFLoader();
 
-    const modelPath = prefix + '/models/duck/';
+    const modelPath = window.$$prefix + '/models/duck/';
 
     gltfLoader.setPath(modelPath);
 

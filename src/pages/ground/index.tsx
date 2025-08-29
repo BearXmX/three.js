@@ -111,7 +111,7 @@ const Ground: React.FC<GroundPropsType> = (props) => {
     helper.color = "rgba(255, 255, 255)";
     scene.add(helper);
 
-    const prefix = import.meta.env.PROD ? '/three.js' : ''
+
 
     // 创建3d文字
     {
@@ -124,7 +124,7 @@ const Ground: React.FC<GroundPropsType> = (props) => {
       }
 
       const font = (await loadFont(
-        prefix + "/helvetiker_regular.typeface.json"
+        window.$$prefix + "/helvetiker_regular.typeface.json"
       )) as Font;
 
       const geometry = new TextGeometry("three.js", {
@@ -159,7 +159,7 @@ const Ground: React.FC<GroundPropsType> = (props) => {
       const loader = new THREE.TextureLoader();
 
 
-      const texture = loader.load(prefix + "/checker.png");
+      const texture = loader.load(window.$$prefix + "/checker.png");
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.magFilter = THREE.NearestFilter;

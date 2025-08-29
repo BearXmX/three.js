@@ -53,9 +53,9 @@ const Earth: React.FC<EarthPropsType> = (props) => {
 
     const gltfLoader = new GLTFLoader();
 
-    const prefix = import.meta.env.PROD ? '/three.js' : ''
 
-    const modelPath = prefix + '/models/earth/';
+
+    const modelPath = window.$$prefix + '/models/earth/';
 
     gltfLoader.setPath(modelPath);
 

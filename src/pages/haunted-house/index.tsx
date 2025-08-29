@@ -152,11 +152,10 @@ const HauntdHouse: React.FC<HauntdHousePropsType> = (props) => {
 
     /* 纹理 */
 
-    const prefix = import.meta.env.PROD ? '/three.js' : ''
     const textureLoader = new THREE.TextureLoader()
-    const doorColorTexture = textureLoader.load(prefix + '/textures/door.png')
-    const wallColorTexture = textureLoader.load(prefix + '/textures/wall.png')
-    const floorColorTexture = textureLoader.load(prefix + '/textures/floor.png')
+    const doorColorTexture = textureLoader.load(window.$$prefix + '/textures/door.png')
+    const wallColorTexture = textureLoader.load(window.$$prefix + '/textures/wall.png')
+    const floorColorTexture = textureLoader.load(window.$$prefix + '/textures/floor.png')
 
     floor.material.map = floorColorTexture
     door.material.map = doorColorTexture
