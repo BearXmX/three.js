@@ -6,10 +6,19 @@ import { BooleanController, GUI } from 'three/examples/jsm/libs/lil-gui.module.m
 
 const SolarSystem: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const earthRef = useRef<THREE.Group | null>(null);
+
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+
+  const earthGroupRef = useRef<THREE.Group | null>(null);
+
+  const earthRef = useRef<THREE.Group<THREE.Object3DEventMap>>(null);
+
   const orbitRef = useRef<THREE.Mesh | null>(null);
+
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+
+  const lineGroupRef = useRef<THREE.Group | null>(null);
+
   const guiRef = useRef<GUI>(null);
 
   // 节气配置：name + 对应的轨道角度（弧度）
@@ -41,7 +50,12 @@ const SolarSystem: React.FC = () => {
     revolutionStartTime: 0, // 公转基准时间
     accumulatedSeconds: 0, // 累计公转时间（秒）
 
-    activeCameraIndex: activeCameraIndexInit
+    activeCameraIndex: activeCameraIndexInit,
+
+    showLongtitudeLine: true,
+    showLatitudeLine: true,
+    showNorthPoleMarker: true,
+    showNSouthPoleMarker: true,
   });
 
   const revolutionGuiRef = useRef<BooleanController<{
@@ -91,7 +105,7 @@ const SolarSystem: React.FC = () => {
 
     const cameraInstanceList = [] as THREE.PerspectiveCamera[]
 
-    const createCamera = (base: [fov: number, aspect: number, near: number, far: number], position: [x: number, y: number, z: number], name: string) => {
+    const createCamera = (base: [fov: number, aspect: number, near: number, far: number], position: [x: number, y: number, z: number], name: string, addToScene = true) => {
       const camera = new THREE.PerspectiveCamera(...base);
 
       camera.position.set(...position);
@@ -102,7 +116,9 @@ const SolarSystem: React.FC = () => {
 
       cameraInstanceList.push(camera);
 
-      scene.add(camera);
+      if (addToScene) {
+        scene.add(camera);
+      }
 
       return camera;
     };
@@ -113,44 +129,64 @@ const SolarSystem: React.FC = () => {
 
     const observeOutEarthCamera = createCamera([45, window.innerWidth / window.innerHeight, 0.1, 1000], [0, 0, 0], '观察外圈地球相机')
 
-    /*     const observeInnerEarthCameraHelper = new THREE.CameraHelper(observeInnerEarthCamera);
-        
-        scene.add(observeInnerEarthCameraHelper); */
+    // --- 北极相机（添加到组中）---
+    const observeEarthNorthPoleCamera = createCamera(
+      [80, window.innerWidth / window.innerHeight, 0.1, 300],
+      [0, 0, 0],
+      '观察地球北极相机',
+      false
+    );
+
+    // --- 南极相机（添加到组中）---
+    const observeEarthSouthPoleCamera = createCamera(
+      [80, window.innerWidth / window.innerHeight, 0.1, 300],
+      [0, 0, 0],
+      '观察地球南极相机',
+      false
+    );
+
+    /*     const observeEarthNorthPoleCameraHelper = new THREE.CameraHelper(observeEarthNorthPoleCamera);
+    
+        scene.add(observeEarthNorthPoleCameraHelper); */
+
+    /** @description 更新观察外圈相机位置 */
 
     const setObserveInnerEarthCameraPosition = (targetAngle: number) => {
       const observeInnerEarthCameraPosition = getEarthPostiton(targetAngle, 2);
 
-      observeInnerEarthCameraPosition[1] = earthRef.current!.position.y;
+      observeInnerEarthCameraPosition[1] = earthGroupRef.current!.position.y + 2;
 
       observeInnerEarthCamera.position.set(...observeInnerEarthCameraPosition);
 
-      observeInnerEarthCamera.lookAt(earthRef.current!.position);
+      observeInnerEarthCamera.lookAt(earthGroupRef.current!.position);
     }
 
+    /** @description 更新观察外圈相机位置 */
     const setObserveOutEarthCameraPosition = (targetAngle: number) => {
       const observeOutEarthCameraPosition = getEarthPostiton(targetAngle, staticConfig.radius * 2);
 
-      observeOutEarthCameraPosition[1] = earthRef.current!.position.y;
+      observeOutEarthCameraPosition[1] = earthGroupRef.current!.position.y + 2;
 
       observeOutEarthCamera.position.set(...observeOutEarthCameraPosition);
 
-      observeOutEarthCamera.lookAt(earthRef.current!.position);
+      observeOutEarthCamera.lookAt(earthGroupRef.current!.position);
     }
 
-    /* 3. 灯光和控制器 */
+    /** @description 灯光控制器 */
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
     scene.add(ambientLight);
 
+    /** @description 轨道控制器 */
     const controls = new OrbitControls(mainCamera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.target.set(0, 0, 0);
 
-    /* 4. 辅助元素 */
+    /** @description 世界坐标系辅助线 */
     const axesHelper = new THREE.AxesHelper(5);
     scene.add(axesHelper);
 
-    /* 5. 创建太阳 */
+    /** @description 创建太阳 */
     const createSun = () => {
       const textureLoader = new THREE.TextureLoader();
       const suntexture = textureLoader.load(window.$$prefix + '/textures/sun.png');
@@ -176,11 +212,12 @@ const SolarSystem: React.FC = () => {
       sunLight.shadow.camera.bottom = -20;
 
       sun.add(sunLight);
+
       scene.add(sun);
       return sun;
     };
 
-    /* 6. 创建轨道 */
+    /** @description 创建轨道 */
     const createOrbit = () => {
       const orbitGeometry = new THREE.RingGeometry(
         staticConfig.radius - 0.05,
@@ -205,7 +242,7 @@ const SolarSystem: React.FC = () => {
       return orbit;
     };
 
-    /* 7. 轨道辅助线 */
+    /** @description 轨道辅助线 */
     const addOrbitHelpers = (orbit: THREE.Mesh, scene: THREE.Scene) => {
       const majorAxis = new THREE.ArrowHelper(
         new THREE.Vector3(1, 0, 0),
@@ -226,7 +263,7 @@ const SolarSystem: React.FC = () => {
       orbit.add(minorAxis);
     };
 
-    /* 8. 创建节气辅助球体 */
+    /** @description 创建节气辅助球体 */
     const createSolarTermsEarth = () => {
       const seasonGeometry = new THREE.SphereGeometry(1, 32, 32);
       const seasonMaterial = new THREE.MeshBasicMaterial({
@@ -243,23 +280,28 @@ const SolarSystem: React.FC = () => {
         return seasonMesh;
       });
     };
+
     const solarTermsEarthInstanceList = createSolarTermsEarth();
 
-    /* 9. 加载地球模型 */
+    /** @description 定义地球组相关参数（全局） */
+    const EARTH_SCALE = 0.018; // 地球自身缩放
+
+    /** @description 加载地球模型&创建经纬线&创建两级 */
     const loadEarth = () => {
       const loader = new GLTFLoader();
       loader.load(
         window.$$prefix + '/models/earth/scene.gltf',
         (gltf) => {
-          const earth = gltf.scene;
-          earthRef.current = earth;
+          const earthMesh = gltf.scene;
 
           // 地球纹理和材质
           const textureLoader = new THREE.TextureLoader();
+
           const earthTexture = textureLoader.load(
             window.$$prefix + '/models/earth/textures/Material.002_diffuse.jpeg'
           );
-          earth.traverse((child) => {
+
+          earthMesh.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.material = new THREE.MeshStandardMaterial({
                 map: earthTexture,
@@ -272,53 +314,269 @@ const SolarSystem: React.FC = () => {
             }
           });
 
-          // 地球缩放和自转轴倾斜
-          const earthScale = 0.018;
+          earthRef.current = earthMesh;
 
-          earth.scale.set(earthScale, earthScale, earthScale);
+          // --- 创建地球组（核心：所有公转逻辑作用于组）---
+          const earthGroup = new THREE.Group();
 
-          earth.rotation.x = THREE.MathUtils.degToRad(-23.5);
+          earthGroup.name = 'EarthGroup';
 
-          // 初始位置：春分
+          earthGroupRef.current = earthGroup; // 用earthGroupRef指向组（后续公转操作组）
+
+          // 记录地球缩放值
+          const earthScale = EARTH_SCALE;
+
+          earthMesh.scale.set(earthScale, earthScale, earthScale);
+
+          // 地球自转轴倾斜（仅影响地球自身）
+          const axialTilt = THREE.MathUtils.degToRad(-23.5);
+
+          earthMesh.rotation.x = axialTilt;
+
+          // 将地球添加到组中
+          earthGroup.add(earthMesh);
+
+          const createDebugLatLonSphere = () => {
+            const linesGroup = new THREE.Group();
+
+            linesGroup.name = 'linesGroup';
+
+            lineGroupRef.current = linesGroup;
+
+            // 基础参数（保留您调试好的数值，确保与地球尺寸匹配）
+            const baseSize = 1.5;                // 基础尺寸
+            const distanceFromEarth = 0.002;     // 线条与地球表面距离
+            const actualRadius = baseSize + distanceFromEarth; // 线条实际半径（含偏移）
+            const axialTilt = THREE.MathUtils.degToRad(-23.5); // 地球自转轴倾斜角度（与地球一致）
+
+            const latitudeWidth = 0.006;
+
+            const latitudes = [
+              {
+                lat: 0,
+                color: '#ff1030'
+              },
+              {
+                lat: 23.5,
+                color: '#f5f500'
+              },
+              {
+                lat: 30,
+                color: '#fff'
+              },
+              {
+                lat: 60,
+                color: '#fff'
+              },
+              {
+                lat: -23.5,
+                color: '#f5f500'
+              },
+              {
+                lat: -30,
+                color: '#fff'
+              },
+              {
+                lat: -60,
+                color: '#fff'
+              },
+
+            ]
+
+            // 3. 纬线
+            latitudes.forEach(latItem => {    // 北纬30°、60°，南纬30°、60°
+              const latRad = THREE.MathUtils.degToRad(latItem.lat); // 纬度转弧度
+              const latRadius = actualRadius * Math.cos(latRad); // 该纬度的圆周半径
+              const latYPos = actualRadius * Math.sin(latRad);   // 该纬度的Y轴高度
+
+              const latLine = new THREE.Mesh(
+                new THREE.RingGeometry(
+                  latRadius,                      // 内半径（该纬度的实际半径）
+                  latRadius + latitudeWidth,          // 外半径（控制线宽）
+                  128
+                ),
+                new THREE.MeshBasicMaterial({
+                  color: latItem.color,                // 黄色区分纬线
+                  side: THREE.DoubleSide,
+                  transparent: false,
+                  depthWrite: false
+                })
+              );
+              latLine.position.y = latYPos;       // 定位到该纬度的Y轴高度
+              latLine.rotation.x = Math.PI / 2;    // 旋转至水平平面
+
+              latLine.name = `latitude-item-${latItem.lat}`;
+              linesGroup.add(latLine);
+            });
+
+            // 4. 经线（多色区分，每30°一条，确保汇聚南北极）
+            const longitudes = [
+              {
+                lon: 0,
+                color: '#00b96b'
+              },
+              {
+                lon: 30,
+                color: '#fff'
+              },
+              {
+                lon: 60,
+                color: '#fff'
+              },
+              {
+                lon: 90,
+                color: '#fff'
+              },
+              {
+                lon: 120,
+                color: '#fff'
+              },
+              {
+                lon: 150,
+                color: '#fff'
+              },
+              {
+                lon: 180,
+                color: '#fff'
+              },
+              {
+                lon: 210,
+                color: '#fff'
+              },
+              {
+                lon: 240,
+                color: '#fff'
+              },
+              {
+                lon: 270,
+                color: '#fff'
+              },
+              {
+                lon: 300,
+                color: '#fff'
+              },
+              {
+                lon: 330,
+                color: '#fff'
+              },
+              {
+                lon: 360,
+                color: '#00b96b'
+              }
+            ]
+
+            longitudes.forEach((lonItem, index) => {
+              const lonRad = THREE.MathUtils.degToRad(lonItem.lon); // 经度转弧度
+
+              const meridian = new THREE.Mesh(
+                new THREE.RingGeometry(
+                  0,                                // 内半径=0（从极点中心出发）
+                  actualRadius + 0.001,                    // 外半径=线条实际半径
+                  128,
+                  0,                                // 起始角度=0（沿X轴正方向）
+                  Math.PI                           // 角度范围=π（覆盖南北极）
+                ),
+                new THREE.MeshBasicMaterial({
+                  color: lonItem.color,    // 每条经线独立颜色
+                  side: THREE.DoubleSide,
+                  transparent: false,
+                  depthWrite: false
+                })
+              );
+
+              // 关键旋转逻辑：确保经线沿Y轴（南北极）分布，且汇聚极点
+              meridian.rotation.z = Math.PI / 2;   // 第一步：绕Z轴转90°，线条沿Y轴方向
+              meridian.rotation.x = Math.PI;   // 第二步：绕X轴转90°，线条立起（垂直赤道）
+              meridian.rotation.y = lonRad;        // 第三步：绕Y轴转对应经度，定位到目标位置
+
+              // 微小Z轴偏移：避免多条经线完全重叠（调试阶段关键）
+              meridian.position.z = 0.0001 * index;
+
+              meridian.name = `longitude-item-${lonItem.lon}`;  // 命名便于调试
+              linesGroup.add(meridian);
+            });
+
+            // 5. 极点标记（白色小球，直观验证经线是否汇聚）
+
+            // 北极点标记
+            const northPoleMarker = new THREE.Mesh(
+              new THREE.SphereGeometry(0.015, 16, 16), // 小球尺寸，确保可见
+              new THREE.MeshBasicMaterial({ color: 0xffffff }) // 白色高对比度
+            );
+            northPoleMarker.position.y = actualRadius; // 定位到北极点（Y轴正方向顶点）
+            northPoleMarker.name = 'north-pole-marker';
+            linesGroup.add(northPoleMarker);
+
+            // 南极点标记
+            const southPoleMarker = new THREE.Mesh(
+              new THREE.SphereGeometry(0.015, 16, 16),
+              new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+
+            southPoleMarker.position.y = -actualRadius; // 定位到南极点（Y轴负方向顶点）
+            southPoleMarker.name = 'south-pole-marker';
+            linesGroup.add(southPoleMarker);
+
+            // 6. 应用地球自转轴倾斜（与地球模型保持一致，确保空间角度正确）
+            linesGroup.rotation.x = axialTilt;
+
+            // 7. 最终缩放：确保线条完全包裹地球，且尺寸匹配
+            linesGroup.scale.set(1.2, 1.2, 1.2);
+
+            return linesGroup;
+          };
+
+          // 创建并添加经纬线（直接添加到场景根节点）
+          const latLonLines = createDebugLatLonSphere();
+
+          earthGroup.add(latLonLines);
+
+          // 设置北极相机位置
+          const observeEarthNorthPoleCameraPos = new THREE.Vector3(0.1, 3, -2);
+
+          observeEarthNorthPoleCamera.position.copy(observeEarthNorthPoleCameraPos);
+
+          observeEarthNorthPoleCamera.lookAt(earthGroup.position);
+
+          earthGroup.add(observeEarthNorthPoleCamera);
+
+          // 设置南极相机位置
+          const observeEarthSouthPoleCameraPos = new THREE.Vector3(0.1, -3, 2);
+
+          observeEarthSouthPoleCamera.position.copy(observeEarthSouthPoleCameraPos);
+
+          observeEarthSouthPoleCamera.lookAt(earthGroup.position);
+
+          earthGroup.add(observeEarthSouthPoleCamera);
+
+          // --- 初始位置设置（组的位置决定公转轨道）---
           const initSolarTerm = solarTerms[guiConfigParamsRef.current.activeSolarTermsIndex];
 
-          earth.position.set(...getEarthPostiton(initSolarTerm.angle));
+          earthGroup.position.set(...getEarthPostiton(initSolarTerm.angle));
 
-          setObserveInnerEarthCameraPosition(initSolarTerm.angle);
-          setObserveOutEarthCameraPosition(initSolarTerm.angle);
+          // 添加到场景
+          scene.add(earthGroup);
 
           // 初始化公转基准时间
           guiConfigParamsRef.current.revolutionStartTime = performance.now();
-
-          scene.add(earth);
         },
         (xhr) => console.log(`地球加载中: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`),
         (error) => console.error('地球加载错误:', error)
       );
     };
 
-    /* 10. 创建 GUI 控制器 */
+    /** @description  创建 GUI 控制器 */
     const createGUI = () => {
       if (guiRef.current) guiRef.current.destroy();
+
       guiRef.current = new GUI();
+
+      guiRef.current.title('参数控制');
+
       const params = guiConfigParamsRef.current;
 
-      // 1. 公转速度控制
-      guiRef.current.add(params, 'revolutionTimeMutiple')
-        .min(1).max(10).step(1)
-        .name('公转速度倍数')
-        .onFinishChange((val: number) => {
-          staticConfig.revolutionTime = revolutionTimeInit / val;
-        });
-
-      // 2. 太阳光强度控制
-      guiRef.current.add(params, 'sunlightIntensity')
-        .min(0.1).max(3).step(0.1)
-        .name('太阳光强度')
-        .onFinishChange((val: number) => {
-          sunLightRef.current!.intensity = val;
-        });
-
+      /* 公转控制 */
+      const revolutionFolder = guiRef.current.addFolder('公转控制');
 
       // 2. 修复公转开关处理函数
       const handleRevolution = (val: boolean) => {
@@ -326,35 +584,47 @@ const SolarSystem: React.FC = () => {
         const params = guiConfigParamsRef.current;
 
         if (!val) {
-          // 暂停时：记录当前累计时间
-          params.lastPauseStartTime = now;
-          // 计算到暂停时的总公转时间
+          // 暂停时：记录当前角度到baseAngle，确保后续计算基于此角度
           const elapsed = ((now) - params.revolutionStartTime) * 0.001;
-          params.accumulatedSeconds = Math.max(0, elapsed);
-        } else {
-          // 重启时：基于当前基准角度和累计时间重新计算
 
-          // 关键：以当前时间为基准，减去已累计的时间，确保从当前位置开始
-          params.revolutionStartTime = now - params.accumulatedSeconds * 1000;
+          const currentDynamicAngle = params.baseAngle + -(elapsed / staticConfig.revolutionTime) * Math.PI * 2;
+
+          params.baseAngle = currentDynamicAngle; // 关键：将当前动态角度固化为基准角度
+
+          params.lastPauseStartTime = now;
+
+          params.accumulatedSeconds = 0; // 重置累计时间，避免重复计算
+        } else {
+          // 开启时：基于当前基准角度（暂停时的角度）重新计算起始时间
+          params.revolutionStartTime = now;
         }
       };
 
-
       // @ts-ignore
-      revolutionGuiRef.current = guiRef.current.add(params, 'isRevolution')
+      revolutionGuiRef.current = revolutionFolder.add(params, 'isRevolution')
         .name('是否开启公转')
         .onChange((val: boolean) => {
           handleRevolution(val)
         });
 
-      // 4. 节气切换（核心修改）
+      // 1. 公转速度控制
+      revolutionFolder.add(params, 'revolutionTimeMutiple')
+        .min(1).max(10).step(1)
+        .name('公转速度倍数')
+        .onFinishChange((val: number) => {
+          staticConfig.revolutionTime = revolutionTimeInit / val;
+        });
+
+      /* 节气控制 */
+      const solarTermsFolder = guiRef.current.addFolder('节气控制');
+
       const solarTermsOptions: Record<string, number> = {};
 
       solarTerms.forEach((item, index) => {
         solarTermsOptions[item.name] = index;
       });
 
-      guiRef.current.add(params, 'activeSolarTermsIndex')
+      solarTermsFolder.add(params, 'activeSolarTermsIndex')
         .options(solarTermsOptions)
         .name('切换节气')
         .onChange((selectedIndex) => {
@@ -372,8 +642,8 @@ const SolarSystem: React.FC = () => {
 
           const targetAngle = selectedSolarTerm.angle;
 
-          if (earthRef.current) {
-            earthRef.current.position.set(...getEarthPostiton(targetAngle));
+          if (earthGroupRef.current) {
+            earthGroupRef.current.position.set(...getEarthPostiton(targetAngle));
 
             setObserveInnerEarthCameraPosition(targetAngle)
             setObserveOutEarthCameraPosition(targetAngle);
@@ -383,9 +653,20 @@ const SolarSystem: React.FC = () => {
           params.baseAngle = targetAngle; // 更新基准角度为当前节气
           params.accumulatedSeconds = 0; // 重置累计时间（新位置从零开始计算）
           params.revolutionStartTime = now; // 重置基准时间为当前时间
-
-          console.log(`切换到${selectedSolarTerm.name}，已重置公转基准`);
         });
+
+      /* 光照控制 */
+      const sunLightFolder = guiRef.current.addFolder('光照控制');
+
+      sunLightFolder.add(params, 'sunlightIntensity')
+        .min(0.1).max(3).step(0.1)
+        .name('太阳光强度')
+        .onFinishChange((val: number) => {
+          sunLightRef.current!.intensity = val;
+        });
+
+      /* 相机控制 */
+      const cameraFolder = guiRef.current.addFolder('相机控制');
 
       //5. 切换相机
       const cameraOptions: Record<string, number> = {};
@@ -394,11 +675,57 @@ const SolarSystem: React.FC = () => {
         cameraOptions[item.userData.name] = index;
       });
 
-      guiRef.current.add(params, 'activeCameraIndex')
+      cameraFolder.add(params, 'activeCameraIndex')
         .options(cameraOptions)
         .name('切换相机')
+
+
+      /* 经纬线控制 */
+      const lonAndLatFolder = guiRef.current.addFolder('经纬线控制&两极控制');
+
+      lonAndLatFolder.add(params, 'showLatitudeLine')
+        .name('是否显示纬线')
+        .onChange((val: boolean) => {
+
+          lineGroupRef.current!.children.forEach(child => {
+            if (child.name.includes('latitude-item')) {
+              child.visible = val;
+            }
+          })
+        })
+
+      lonAndLatFolder.add(params, 'showLongtitudeLine')
+        .name('是否显示经线')
+        .onChange((val: boolean) => {
+          lineGroupRef.current!.children.forEach(child => {
+            if (child.name.includes('longitude-item')) {
+              child.visible = val;
+            }
+          })
+        })
+      lonAndLatFolder.add(params, 'showNorthPoleMarker')
+        .name('是否显示北极点')
+        .onChange((val: boolean) => {
+          lineGroupRef.current!.children.forEach(child => {
+            if (child.name.includes('north-pole-marker')) {
+              child.visible = val;
+            }
+          })
+        })
+
+      lonAndLatFolder.add(params, 'showNSouthPoleMarker')
+        .name('是否显示南极点')
+        .onChange((val: boolean) => {
+          lineGroupRef.current!.children.forEach(child => {
+            if (child.name.includes('south-pole-marker')) {
+              child.visible = val;
+            }
+          })
+        })
+
     };
 
+    /** @description 创建星系 */
     const createStars = () => {
 
       const textureLoader = new THREE.TextureLoader()
@@ -440,12 +767,17 @@ const SolarSystem: React.FC = () => {
       scene.add(stars)
     };
 
-    /* 11. 初始化场景元素 */
-    createSun();
-    createOrbit();
-    loadEarth();
-    createGUI();
-    createStars()
+    /** @description 初始化场景元素 */
+    const todo = () => {
+      createSun();
+      createOrbit();
+      loadEarth();
+      createStars()
+      createGUI();
+    }
+
+
+    todo()
 
     /* 12. 窗口大小调整 */
     const handleResize = () => {
@@ -464,49 +796,52 @@ const SolarSystem: React.FC = () => {
 
     const animate = (time: number) => {
       const params = guiConfigParamsRef.current;
+
       const elapsedSeconds = ((time) - params.revolutionStartTime) * 0.001;
 
-      if (earthRef.current && sunLightRef.current) {
+      if (earthGroupRef.current && sunLightRef.current) {
         handleResize();
 
-        // 存储当前地球公转角度（用于光照计算）
+        // 计算当前角度（确保切换时连续）
         let currentAngle = params.baseAngle;
 
         if (params.isRevolution && elapsedSeconds >= 0) {
-          // 计算当前公转角度
+
+          // 开启公转时：在当前基准角度（暂停时的角度）基础上累加
+
           currentAngle = params.baseAngle + -(elapsedSeconds / staticConfig.revolutionTime) * Math.PI * 2;
-          earthRef.current.position.set(...getEarthPostiton(currentAngle));
+
+          earthGroupRef.current.position.set(...getEarthPostiton(currentAngle));
+
           setObserveInnerEarthCameraPosition(currentAngle);
+
           setObserveOutEarthCameraPosition(currentAngle);
         }
 
-        // 地球自转
-        earthRef.current.rotation.y -= staticConfig.earthRotationSpeed;
-
-        // 核心修正：调整角度相位，确保初始值为0
-        // 1. 标准化角度到 0 ~ 2π 范围
+        // 光照计算（基于连续的currentAngle，无突变）
         const normalizedAngle = (currentAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
 
-        // 2. 关键修正：增加 π/2 相位偏移，使周期从0开始
-        // 修正后对应关系：
-        // 0 → 0 → 春分（偏移0）
-        // π/2 → 1 → 夏至（偏移12）
-        // π → 0 → 秋分（偏移0）
-        // 3π/2 → -1 → 冬至（偏移-12）
-        const adjustedAngle = normalizedAngle + Math.PI / 2; // 相位补偿
+        const adjustedAngle = normalizedAngle + Math.PI / 2;
+
         const sinValue = Math.sin(adjustedAngle);
 
-        // 3. 映射到目标偏移范围（0 → 12 → 0 → -12）
-        const maxOffset = 12;
+        const maxOffset = 6;
+
         const lightOffsetY = sinValue * maxOffset;
 
-        // 应用光照偏移
         sunLightRef.current.target.position.set(
-          earthRef.current.position.x,
-          earthRef.current.position.y + lightOffsetY,
-          earthRef.current.position.z
+          earthGroupRef.current.position.x,
+          earthGroupRef.current.position.y + lightOffsetY,
+          earthGroupRef.current.position.z
         );
+
         sunLightRef.current.target.updateMatrixWorld();
+
+        // 地球自转
+        const earthMesh = earthRef.current;
+        if (earthMesh) {
+          earthMesh.rotation.y -= staticConfig.earthRotationSpeed;
+        }
       }
 
       controls.update();
