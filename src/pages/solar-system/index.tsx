@@ -51,18 +51,26 @@ const SolarSystem: React.FC = () => {
   const activeSolarTermsIndexInit = 0;
   const activeCameraIndexInit = 0;
 
+  /* 自转一圈时间 */
+  const autoRevolutionTimeInit = (revolutionTimeInit / 365) * 50; // 0.1秒/圈
+
+  // 新增：自转相关计算参数
+  const baseAngularVelocity = (2 * Math.PI) / autoRevolutionTimeInit; // 基础角速度(rad/s) 5s转一圈
+
+  const lastFrameTimeRef = useRef<number>(0); // 上一帧时间，用于计算时间差
+
   // 静态配置
   const staticConfig = {
     radius: 25,                      // 轨道半径
     revolutionTime: revolutionTimeInit, // 公转周期（秒/圈）
-    earthRotationSpeed: 0.02,        // 地球自转速度
+    earthRotationSpeed: 0.02,        // 保留原始属性但不再使用
     sunlightIntensity: 2.5,          // 太阳光强度
     observeOrbitEarthBaseAngle: Math.PI / 8,
     directLineWidth: 3, // 直射光线宽度（比其他线粗，突出显示）
     directLineColor: 0xffa500 // 直射光线颜色（橙色，区分其他线条）
   };
 
-  // GUI 配置参数（新增：直射光线控制）
+  // GUI 配置参数
   const guiConfigParamsRef = useRef({
     revolutionTimeMutiple: 1,
     sunlightIntensity: staticConfig.sunlightIntensity,
@@ -77,11 +85,11 @@ const SolarSystem: React.FC = () => {
     showNorthPoleMarker: true,
     showNSouthPoleMarker: true,
 
-    isAutoroatation: true,
-    autonRevolutionTimeMutiple: 1,
+    isAutoRoatation: true,
+    autonRevolutionTimeMutiple: 1, // 自转倍速
 
-    showSunDirectLine: true, // 新增：直射光线显示开关
-    directLineIntensity: 1.0 // 新增：直射光线透明度（0~1）
+    showSunDirectLine: true,
+    directLineIntensity: 1.0
   });
 
   const revolutionGuiRef = useRef<BooleanController<{ isRevolution: boolean }>>(null);
@@ -196,7 +204,7 @@ const SolarSystem: React.FC = () => {
       if (!sunRef.current || !earthGroupRef.current || !sunDirectLineRef.current) return;
 
       if (isDirectLatTransitionRef.current) {
-        // 手动切换节气时的过渡逻辑（保持不变）
+        // 手动切换节气时的过渡逻辑
         const elapsed = time - transitionStartTimeRef.current;
         const progress = Math.min(elapsed / transitionDuration, 1);
         currentDirectLatRef.current = THREE.MathUtils.lerp(
@@ -209,14 +217,14 @@ const SolarSystem: React.FC = () => {
           currentDirectLatRef.current = targetDirectLatRef.current;
         }
       } else if (params.isRevolution) {
-        // 【核心修正：调整角度映射，使直射点先北移后南移】
+        // 核心修正：调整角度映射，使直射点先北移后南移
         const currentAngle = params.baseAngle + (time - params.revolutionStartTime) * 0.001 / staticConfig.revolutionTime * Math.PI * 2;
         // 关键：用-cos函数替代sin，确保角度0→π/2→π→3π/2时，直射纬度0→23.5°→0→-23.5°
         const latRatio = -Math.cos(currentAngle); // 角度0→cos(0)=1→-1→直射纬度0；角度π/2→cos(π/2)=0→0→23.5°
         currentDirectLatRef.current = latRatio * obliquity;
       }
 
-      // 后续计算直射点坐标和线条位置的逻辑保持不变...
+      // 计算直射点坐标和线条位置
       const directPointLocal = calculateDirectPointLocal(currentDirectLatRef.current);
       const directPointWorld = directPointLocal.applyMatrix4(earthGroupRef.current.matrixWorld);
       directPointRef.current.copy(directPointWorld);
@@ -245,7 +253,6 @@ const SolarSystem: React.FC = () => {
         const cameraPosition = getEarthCenterPos(item.targetAngle!, item.radius);
 
         if (item.position.x !== undefined) {
-
           cameraPosition[0] = item.position.x!;
         }
 
@@ -380,7 +387,7 @@ const SolarSystem: React.FC = () => {
 
           const textureLoader = new THREE.TextureLoader();
           const earthTexture = textureLoader.load(
-            window.$$prefix + '/models/earth/textures/Material.002_diffuse.jpeg'
+            window.$$prefix + '/models/earth/textures/Material.002_diffuse.jpg'
           );
 
           earthMesh.traverse((child) => {
@@ -537,13 +544,14 @@ const SolarSystem: React.FC = () => {
           southTropicLineRef.current = createTropicLine(0x4444ff);
 
           guiConfigParamsRef.current.revolutionStartTime = performance.now();
+          lastFrameTimeRef.current = performance.now(); // 初始化自转时间
         },
         (xhr) => console.log(`地球加载中: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`),
         (error) => console.error('地球加载错误:', error)
       );
     };
 
-    /** 创建GUI（新增直射光线控制） */
+    /** 创建GUI */
     const createGUI = () => {
       if (guiRef.current) guiRef.current.destroy();
       guiRef.current = new GUI();
@@ -572,27 +580,33 @@ const SolarSystem: React.FC = () => {
         .onChange((val: boolean) => handleRevolution(val));
 
       revolutionFolder.add(params, 'revolutionTimeMutiple')
-        .min(1).max(10).step(1)
+        .min(1).max(5).step(1)
         .name('公转速度倍数')
         .onFinishChange((val: number) => {
           staticConfig.revolutionTime = revolutionTimeInit / val;
         });
 
-      // 自转控制
+      // 自转控制（只修改这部分）
       const autoroatationFolder = guiRef.current.addFolder('自转控制');
 
       // @ts-ignore
-      autoroatationFolder.add(params, 'isAutoroatation')
+      autoroatationFolder.add(params, 'isAutoRoatation')
         .name('是否开启自转')
+        .onChange((val: boolean) => {
+          // 切换自转状态时重置时间，避免跳跃
+          if (val) {
+            lastFrameTimeRef.current = performance.now();
+          }
+        });
 
       autoroatationFolder.add(params, 'autonRevolutionTimeMutiple')
         .min(1).max(10).step(1)
         .name('自转速度倍数')
         .onFinishChange((val: number) => {
+          // 仅更新倍数值，不改变其他逻辑
         });
 
-
-      // 节气控制（修改：触发直射纬度过渡）
+      // 节气控制
       const solarTermsFolder = guiRef.current.addFolder('节气控制');
       const solarTermsOptions: Record<string, number> = {};
       solarTerms.forEach((item, index) => {
@@ -632,16 +646,16 @@ const SolarSystem: React.FC = () => {
 
           transitionStartTimeRef.current = now; // 过渡开始时间
 
-          // ⑤ 立即更新直射光线位置，确保光线精准对准
+          // 立即更新直射光线位置
           if (sunDirectLineRef.current) {
-            updateSunDirectLine(now); // 手动触发一次光线更新
+            updateSunDirectLine(now);
           }
 
           params.baseAngle = targetAngle;
           params.revolutionStartTime = now;
         });
 
-      // 光照&直射光线控制（新增直射光线参数）
+      // 光照&直射光线控制
       const sunLightFolder = guiRef.current.addFolder('光照&直射光线控制');
       sunLightFolder.add(params, 'sunlightIntensity')
         .min(0.1).max(3).step(0.1)
@@ -650,9 +664,7 @@ const SolarSystem: React.FC = () => {
           if (sunLightRef.current) sunLightRef.current.intensity = val;
         });
 
-
-
-      // 新增：直射光线控制
+      // 直射光线控制
       sunLightFolder.add(params, 'showSunDirectLine')
         .name('显示太阳直射光线')
         .onChange((val: boolean) => {
@@ -753,7 +765,7 @@ const SolarSystem: React.FC = () => {
 
     /** 初始化场景 */
     const make = () => {
-      createSun(); // 创建太阳时初始化直射光线
+      createSun();
       createSunDirectLine();
       createOrbit();
       loadEarth();
@@ -778,9 +790,10 @@ const SolarSystem: React.FC = () => {
 
     handleResize();
 
-    /** 动画循环（新增直射光线更新） */
+    /** 动画循环（只修改自转相关部分） */
     const animate = (time: number) => {
       const params = guiConfigParamsRef.current;
+
 
       const elapsedSeconds = ((time) - params.revolutionStartTime) * 0.001;
 
@@ -815,13 +828,27 @@ const SolarSystem: React.FC = () => {
         );
         sunLightRef.current.target.updateMatrixWorld();
 
-        // 3. 地球自转
+        // 3. 地球自转（只修改这部分逻辑）
         const earthMesh = earthRef.current;
-        if (earthMesh) {
-          earthMesh.rotation.y -= params.isAutoroatation ? staticConfig.earthRotationSpeed * params.autonRevolutionTimeMutiple : 0;
+
+        // 计算帧时间差（用于自转计算）
+
+        const deltaTime = time - lastFrameTimeRef.current;
+
+        const deltaTimeSec = deltaTime / 1000; // 转换为秒
+
+        lastFrameTimeRef.current = time;
+
+        if (earthMesh && params.isAutoRoatation) {
+          // 计算当前帧应该旋转的角度
+
+          // 基础角速度 × 倍速 × 时间差
+          const rotateAngle = baseAngularVelocity * params.autonRevolutionTimeMutiple * deltaTimeSec;
+
+          earthMesh.rotation.y += rotateAngle; // 自西向东旋转
         }
 
-        // 5. 新增：更新太阳直射光线（含过渡效果）
+        // 4. 更新太阳直射光线
         updateSunDirectLine(time);
       }
 
@@ -834,7 +861,7 @@ const SolarSystem: React.FC = () => {
     requestAnimationFrame(animate);
     window.addEventListener('resize', handleResize);
 
-    /** 清理（新增直射光线资源释放） */
+    /** 清理 */
     return () => {
       window.removeEventListener('resize', handleResize);
       renderer?.dispose();
