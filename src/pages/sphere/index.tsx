@@ -40,11 +40,18 @@ const Sphere: React.FC<SpherePropsType> = (props) => {
     const scene = new THREE.Scene();
 
     // 绘制几何图形
-    const geometry = new THREE.SphereGeometry(15, 32, 16);
+    const geometry = new THREE.SphereGeometry(12, 62, 62);
+
+
+    const textureLoader = new THREE.TextureLoader();
+
+    const earthTexture = textureLoader.load(
+      window.$$prefix + '/models/earth/textures/Material.002_diffuse.jpeg'
+    );
 
     const material = new THREE.MeshStandardMaterial({
+      map: earthTexture,
       color: '#fff',
-      wireframe: true,   // 添加线框
       side: THREE.DoubleSide,
     });
 
