@@ -31,13 +31,13 @@ export const solarTerms = [
 
 // 纬线
 export const latitudes = [
-  { lat: 0, color: '#ff1030', width: 0.03 },     // 赤道
+  { lat: 0, color: '#ff1030', width: 0.06 },     // 赤道
   { lat: obliquity, color: '#f5f500', width: 0.03 }, // 北回归线
-  { lat: 30, color: '#fff', width: 0.006 },
-  { lat: 60, color: '#fff', width: 0.006 },
+  { lat: 30, color: '#f5f500', width: 0.03 },
+  { lat: 60, color: '#f5f500', width: 0.03 },
   { lat: -obliquity, color: '#f5f500', width: 0.03 },// 南回归线
-  { lat: -30, color: '#fff', width: 0.006 },
-  { lat: -60, color: '#fff', width: 0.006 },
+  { lat: -30, color: '#f5f500', width: 0.03 },
+  { lat: -60, color: '#f5f500', width: 0.03 },
 ];
 
 // 经线
@@ -63,7 +63,7 @@ export const staticConfig = {
   revolutionTime: revolutionTimeInit, // 公转周期（秒/圈）
   earthRotationSpeed: 0.02,        // 保留原始属性但不再使用
   sunlightIntensity: 2.5,          // 太阳光强度
-  observeOrbitEarthBaseAngle: Math.PI / 8,
+  observeOrbitEarthBaseAngle: Math.PI / 10,
 };
 
 // 【新增1：圆柱配置（可调整粗细/平滑度）】
@@ -99,7 +99,15 @@ export const makeSun = (scene: THREE.Scene) => {
   sunLight.shadow.camera.bottom = -20;
 
   sun.add(sunLight);
+
+  sunLight.position.z = -5
+
   scene.add(sun);
+
+  const initSolarTerm = solarTerms[activeSolarTermsIndexInit];
+
+  sunLight.target.position.set(      // 初始地球位置（春分）
+    ...getEarthCenterPos(initSolarTerm.angle))
 
   return {
     sun,
@@ -109,7 +117,7 @@ export const makeSun = (scene: THREE.Scene) => {
 
 export const makeAmbientLight_AxesHelper_OrbitControls = (scene: THREE.Scene, mainCamera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) => {
   /** 灯光 */
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.05);
   scene.add(ambientLight);
 
   /** 坐标系辅助线 */
@@ -147,7 +155,7 @@ export const makeOrbit = (scene: THREE.Scene) => {
 
 /** 创建节气辅助球体 */
 export const makeSolarTermsEarth = () => {
-  const seasonGeometry = new THREE.SphereGeometry(earthRadius, 32, 32);
+  const seasonGeometry = new THREE.SphereGeometry(earthRadius / 2, 32, 32);
   const seasonMaterial = new THREE.MeshBasicMaterial({
     color: '#24758f',
     transparent: true,
@@ -207,80 +215,117 @@ export const makeStars = () => {
 };
 
 /** 创建经纬线&极点&回归线标记 */
-export const createDebugLatLonSphere = (earthRadius: number) => {
+export const createDebugLatLonSphere = (earthRadius: number, earthGroup: THREE.Group) => {
   const linesGroup = new THREE.Group();
   linesGroup.name = 'linesGroup';
 
-  // 核心修改：用地球真实半径作为基准，而非硬编码1.5
+  // 基准参数（与地球保持微小距离，避免重叠）
   const baseSize = earthRadius;
-  const distanceFromEarth = earthRadius * 0.01; // 距离地球表面5%半径（避免重叠）
-  const actualRadius = baseSize + distanceFromEarth; // 经纬线半径=地球半径+小偏移
+  const distanceFromEarth = earthRadius * 0.008;
+  const actualRadius = baseSize + distanceFromEarth;
 
-  // 纬线计算（基于实际半径）
+  // 关键：让经纬线组整体继承地球的倾斜角度（与地球自转轴一致）
+  // 这样纬线平面会与地球赤道平面平行，角度正确
+
+  // ---------------------- 纬线修复 ----------------------
   latitudes.forEach(latItem => {
-    const latRad = THREE.MathUtils.degToRad(latItem.lat);
-    const latRadius = actualRadius * Math.cos(latRad);
-    const latYPos = actualRadius * Math.sin(latRad);
+    const latDeg = latItem.lat;
+    const latRad = THREE.MathUtils.degToRad(latDeg);
+    const obliquityRad = THREE.MathUtils.degToRad(obliquity); // 黄赤交角（弧度）
 
+    // 1. 基础尺寸（与地球半径严格绑定）
+    const radius = earthRadius;
+    const gap = radius * 0.002; // 贴近地球表面的间隙
+    const ringRadius = radius + gap;
+
+    // 2. 核心：三维位置计算（完整补偿旋转后的坐标系偏移）
+    // 纬度对应的径向距离（垂直于自转轴的半径）
+    const latitudeCircleRadius = ringRadius * Math.cos(latRad);
+    // 纬度对应的轴向距离（沿自转轴的距离，北纬为正，南纬为负）
+    const axialDistance = ringRadius * Math.sin(latRad);
+
+    // 3. 计算旋转后的实际位置（关键修复）
+    // 地球自转轴倾斜后，沿自转轴的点在世界坐标系中会同时有Y和Z分量
+    const yPosition = axialDistance * Math.cos(obliquityRad); // Y轴分量
+    const zPosition = axialDistance * Math.sin(obliquityRad); // Z轴分量（之前缺失的部分）
+
+    // 4. 创建纬线圈
     const latLine = new THREE.Mesh(
-      new THREE.RingGeometry(latRadius, latRadius + latItem.width, 128),
+      new THREE.RingGeometry(
+        latitudeCircleRadius,
+        latitudeCircleRadius + latItem.width,
+        128
+      ),
       new THREE.MeshBasicMaterial({
         color: latItem.color,
         side: THREE.DoubleSide,
-        transparent: false,
-        depthWrite: false // 避免遮挡地球
-      })
-    );
-    latLine.position.y = latYPos;
-    latLine.rotation.x = Math.PI / 2;
-    latLine.name = `latitude-item-${latItem.lat}`;
-    linesGroup.add(latLine);
-  });
-
-  // 经线计算（同上）
-  longitudes.forEach((lonItem, index) => {
-    const lonRad = THREE.MathUtils.degToRad(lonItem.lon);
-    const meridian = new THREE.Mesh(
-      new THREE.RingGeometry(0, actualRadius + earthRadius * 0.001, 128, 0, Math.PI),
-      new THREE.MeshBasicMaterial({
-        color: lonItem.color,
-        side: THREE.DoubleSide,
-        transparent: false,
+        transparent: true,
+        opacity: 0.8,
         depthWrite: false
       })
     );
+
+    // 5. 位置与旋转（匹配你的正确角度）
+    latLine.position.set(0, yPosition, zPosition); // 同时设置Y和Z
+
+    latLine.rotation.x = THREE.MathUtils.degToRad(obliquity - 90); // 保持你确认的正确角度
+
+    // 6. 确保与地球同中心
+    latLine.matrixAutoUpdate = true;
+    latLine.updateMatrix();
+
+    earthGroup.add(latLine);
+  });
+
+  // ---------------------- 经线修复 ----------------------
+  longitudes.forEach((lonItem, index) => {
+    const lonRad = THREE.MathUtils.degToRad(lonItem.lon);
+
+    // 创建经线圈（半圆环，覆盖南北极）
+    const meridian = new THREE.Mesh(
+      new THREE.RingGeometry(0, actualRadius + earthRadius * 0.0005, 128, 0, Math.PI),
+      new THREE.MeshBasicMaterial({
+        color: lonItem.color,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false
+      })
+    );
+
+    // 经线旋转：使其从默认平面转为沿经线方向
     meridian.rotation.z = Math.PI / 2;
     meridian.rotation.x = Math.PI;
-    meridian.rotation.y = lonRad;
-    meridian.position.z = 0.0001 * index; // 微小偏移避免线条重叠
+    meridian.rotation.y = lonRad; // 沿经度旋转
+    meridian.position.z = 0.0001 * index; // 微小偏移避免重叠
     meridian.name = `longitude-item-${lonItem.lon}`;
+
     linesGroup.add(meridian);
   });
 
-  // 极点标记（尺寸适配地球半径）
-  const poleMarkerSize = earthRadius * 0.025; // 极点尺寸=地球半径的10%
-
+  // ---------------------- 极点标记 ----------------------
+  const poleMarkerSize = earthRadius * 0.025;
+  // 北极点
   const northPoleMarker = new THREE.Mesh(
     new THREE.SphereGeometry(poleMarkerSize, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffffff })
+    new THREE.MeshBasicMaterial({ color: 'red' })
   );
   northPoleMarker.position.y = actualRadius;
   northPoleMarker.name = 'north-pole-marker';
   linesGroup.add(northPoleMarker);
 
-
+  // 南极点
   const southPoleMarker = new THREE.Mesh(
     new THREE.SphereGeometry(poleMarkerSize, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffffff })
+    new THREE.MeshBasicMaterial({ color: 'red' })
   );
   southPoleMarker.position.y = -actualRadius;
   southPoleMarker.name = 'south-pole-marker';
   linesGroup.add(southPoleMarker);
 
-  // 应用自转轴倾斜（保留）
-  linesGroup.rotation.x = obliquityRad;
-  // 移除固定缩放1.2，避免再次放大
-  // linesGroup.scale.set(1.2, 1.2, 1.2); 
+  // 关键：将经纬线组添加到地球的父级（如scene），而非earthGroup
+  // 这样经纬线不会跟随earthGroup自转（如果earthGroup有自转逻辑）
+  // 示例：scene.add(linesGroup); 而非 earthGroup.add(linesGroup);
 
   return linesGroup;
 };
@@ -312,36 +357,7 @@ export const makeSunDirectCylinder = (): THREE.Mesh => {
 };
 
 
-/** 新增：计算当前直射点的地球表面坐标（局部坐标） */
-export const makeCalculateDirectPointLocal = (directLat: number,
-  earthRef: React.RefObject<THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial, THREE.Object3DEventMap> | null>,
-  earthGroupRef: React.RefObject<THREE.Group<THREE.Object3DEventMap> | null>,
-  earthRadiusRef: React.RefObject<number>): THREE.Vector3 => {
-  if (!earthRef.current || !earthGroupRef.current) return new THREE.Vector3();
 
-  // ① 地球实际半径（基于模型缩放比例，确保直射点在地球表面）
-  const earthScale = earthRef.current.scale.x;
-
-  const actualEarthRadius = earthRadiusRef.current * earthScale;
-
-  // ② 直射纬度转弧度（考虑地球自转轴倾斜）
-  const directLatRad = THREE.MathUtils.degToRad(directLat);
-  const tiltRad = obliquityRad; // 黄赤交角（23.5°）
-
-  // ③ 关键：计算地球局部坐标系中的直射点（考虑自转轴倾斜）
-  // - 经度固定为0°（面向太阳的“正午”位置，确保直射点在白天）
-  const lonRad = 0;
-  // 先计算无倾斜时的坐标，再通过旋转矩阵应用自转轴倾斜
-  const x = actualEarthRadius * Math.cos(directLatRad) * Math.cos(lonRad);
-  const y = actualEarthRadius * Math.sin(directLatRad);
-  const z = actualEarthRadius * Math.cos(directLatRad) * Math.sin(lonRad);
-
-  // 应用自转轴倾斜（绕X轴旋转tiltRad角度）
-  const tiltMatrix = new THREE.Matrix4().makeRotationX(tiltRad);
-  const directPointLocal = new THREE.Vector3(x, y, z).applyMatrix4(tiltMatrix);
-
-  return directPointLocal;
-};
 
 /** 新增：将经纬度转换为地球表面的3D坐标 */
 export const latLonToPosition = (lat: number, lon: number, radius: number): THREE.Vector3 => {

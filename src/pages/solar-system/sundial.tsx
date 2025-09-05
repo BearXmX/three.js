@@ -7,12 +7,17 @@ type SundialPropsType = {
   params: {
     latitudePosition: number,
     longitudePosition: number
+    shanghaiTimeStr: string
   }
 }
 
 const Sundial: React.FC<SundialPropsType> = (props) => {
 
+  const { params } = props
+
   const canvas = useRef<HTMLCanvasElement>(null)
+
+  const timeSpanRef = useRef<HTMLSpanElement>(null)
 
   const main = () => {
     // 渲染器
@@ -156,8 +161,9 @@ const Sundial: React.FC<SundialPropsType> = (props) => {
 
       const seconds = time * 0.001; // 将毫秒转换为秒
 
-
       const params = props.params
+
+      timeSpanRef.current!.innerText = `${params.shanghaiTimeStr}`
 
       cylinderGroup.rotation.x = (Math.PI / 180) * (90 - (Math.abs(params.latitudePosition) === 90 ? 0 : Math.abs(params.latitudePosition)))
 
@@ -188,9 +194,11 @@ const Sundial: React.FC<SundialPropsType> = (props) => {
     return clean
   }, [canvas.current])
 
-  return <div className='sundial-container' style={{ position: 'absolute', left: 0, bottom: 0, width: 300, height: 300 }}>
-    <canvas className="canvas-body" ref={canvas}></canvas>
-
+  return <div className='sundial-container' style={{ position: 'absolute', left: 0, bottom: 0 }}>
+    <div style={{ color: '#fff' }}>上海时间：<span ref={timeSpanRef}></span></div>
+    <div style={{ width: 200, height: 200 }}>
+      <canvas className="canvas-body" ref={canvas}></canvas>
+    </div>
   </div>
 
 }
