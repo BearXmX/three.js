@@ -18,44 +18,46 @@ import {
   solarTerms,
   staticConfig,
   earthRadius,
-  autoRevolutionTimeInit
+  currentTimeStrInit,
+  latitudePositionInit,
+  longitudePositionInit,
+  INITIAL_BASE_MINUTES_INIT,
 } from './contant';
 import Sundial from './sundial';
 
 const SolarSystem: React.FC = () => {
-  // 基础DOM和Three.js对象引用（保持不变）
+  // 基础DOM和Three.js对象引用
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+
   const earthGroupRef = useRef<THREE.Group | null>(null);
+
   const earthRef = useRef<THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> | null>(null);
+
   const orbitRef = useRef<THREE.Mesh | null>(null);
+
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+
   const lineGroupRef = useRef<THREE.Group | null>(null);
+
   const guiRef = useRef<GUI>(null);
-  const sunPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(2, 0, 0));
+
   const sunRef = useRef<THREE.Mesh | null>(null);
 
-  // 地球参数引用（保持不变）
-  const earthRadiusRef = useRef<number>(earthRadius);
-
-  // 太阳直射相关引用（保持不变）
-  const sunDirectCylinderRef = useRef<THREE.Mesh | null>(null);
-  const currentDirectLatRef = useRef<number>(0);
-  const targetDirectLatRef = useRef<number>(0);
-  const isDirectLatTransitionRef = useRef<boolean>(false);
-  const transitionStartTimeRef = useRef<number>(0);
-  const transitionDuration = 1000; // 过渡动画时长（毫秒）
-
-  // 时间和动画控制引用（保持不变）
+  // 自转
   const lastFrameTimeRef = useRef<number>(0);
-  const rotationStartTimeRef = useRef<number | null>(null);
-  const accumulatedRotationTimeRef = useRef<number>(0);
-  const initialTimeOffsetRef = useRef<number>(0); // 初始时间偏移（毫秒）
+  const initialRotationYRef = useRef<number>(0); // 初始旋转角度（用于计算相对旋转量）
+  const rotationOffsetRef = useRef<number>(0); // 记录暂停时的旋转偏移量
+  const isFirstStartRef = useRef<boolean>(true); // 是否是首次开启自转
 
-  // 标记点引用（保持不变）
+  const latitudeGuiRef = useRef<any>(null);
+  const longitudeGuiRef = useRef<any>(null);
+
+  // 标记点引用
   const markersRef = useRef<THREE.Mesh[]>([]);
 
-  // GUI配置参数（初始时间设置为8:04）
+  // GUI配置参数（初始时间设置为8:00）
   const guiConfigParamsRef = useRef({
     revolutionTimeMutiple: 1,
     sunlightIntensity: staticConfig.sunlightIntensity,
@@ -64,9 +66,7 @@ const SolarSystem: React.FC = () => {
     lastPauseStartTime: 0,
     baseAngle: solarTerms[activeSolarTermsIndexInit].angle,
     revolutionStartTime: 0,
-
     activeCameraIndex: activeCameraIndexInit,
-
     showLongtitudeLine: true,
     showLatitudeLine: true,
     showNorthPoleMarker: true,
@@ -78,17 +78,21 @@ const SolarSystem: React.FC = () => {
     showSunDirectLine: true,
     directLineIntensity: 1.0,
 
-    latitudePosition: 31,   // 上海纬度
-    longitudePosition: 121,  // 上海经度
-    shanghaiTimeStr: '08:04' // 初始上海时间
+    latitudePosition: latitudePositionInit,   // 北京纬度
+    longitudePosition: longitudePositionInit,  // 北京经度
+    currentTimeStr: currentTimeStrInit, // 初始北京时间
+    targetPositionCurrentTimeStr: currentTimeStrInit
   });
+
+  // 新增：初始时间基准（8:00对应的分钟数）
+  const INITIAL_BASE_MINUTES = INITIAL_BASE_MINUTES_INIT // 8:00 = 480分钟
 
   const revolutionGuiRef = useRef<any>(null);
 
   const initScene = () => {
     if (!canvasRef.current) return;
 
-    // 初始化渲染器（保持不变）
+    // 初始化渲染器
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       antialias: true,
@@ -99,14 +103,16 @@ const SolarSystem: React.FC = () => {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // 初始化场景（保持不变）
+    // 初始化场景
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050515);
     const starts = makeStars();
     scene.add(starts);
 
-    // 初始化相机（保持不变）
+    // 初始化相机
     const cameraInstanceList: THREE.PerspectiveCamera[] = [];
+
+
     const createCamera = (
       base: [fov: number, aspect: number, near: number, far: number],
       position: [x: number, y: number, z: number],
@@ -122,7 +128,7 @@ const SolarSystem: React.FC = () => {
       return camera;
     };
 
-    // 创建各类相机（保持不变）
+    // 创建各类相机
     const mainCamera = createCamera([75, window.innerWidth / window.innerHeight, 0.1, 1000], [0, 15, 40], '主相机');
     const observeInnerEarthCamera = createCamera([75, window.innerWidth / window.innerHeight, 0.001, 1000], [0, 0, 0], '观察内圈地球相机');
     const observeOutEarthCamera = createCamera([75, window.innerWidth / window.innerHeight, 0.1, 1000], [0, 0, 0], '观察外圈地球相机');
@@ -131,42 +137,135 @@ const SolarSystem: React.FC = () => {
     const observeEarthNightLineCamera = createCamera([80, window.innerWidth / window.innerHeight, 0.1, 300], [0, 0, 0], '观察地球昏线相机', false);
     const observeEarthMorningLineCamera = createCamera([80, window.innerWidth / window.innerHeight, 0.1, 300], [0, 0, 0], '观察地球晨线相机', false);
 
-    // 初始化控制器（保持不变）
+    // 初始化控制器
     const { controls } = makeAmbientLight_AxesHelper_OrbitControls(scene, mainCamera, renderer);
 
-    // 创建标记点（保持不变）
-    const createMarker = (lat: number, lon: number, color: string = '#00b96b', size: number = 0.05): THREE.Mesh => {
+    /* 点击事件 */
+    const addEarthClickEvent = () => {
+      if (!canvasRef.current || !earthGroupRef.current) return;
+
+      const raycaster = new THREE.Raycaster();
+
+      const mouse = new THREE.Vector2();
+
+      const onCanvasClick = (event: MouseEvent) => {
+        const earthMesh = earthRef.current;
+        const currentCamera = cameraInstanceList[guiConfigParamsRef.current.activeCameraIndex];
+        if (!earthMesh || !currentCamera) return;
+
+        // 1. 计算鼠标归一化坐标（不变）
+        const rect = canvasRef.current!.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // 2. 更新相机矩阵（不变）
+        currentCamera.updateMatrixWorld();
+        raycaster.setFromCamera(mouse, currentCamera);
+        raycaster.params.Mesh.threshold = 0.1;
+
+        // 3. 检测地球本体（不变）
+        const intersects = raycaster.intersectObject(earthMesh, false);
+        if (intersects.length === 0) return;
+
+        // 4. 坐标转换（不变）
+        const worldPoint = intersects[0].point.clone();
+        const earthToWorldMatrix = earthMesh.matrixWorld;
+        const worldToEarthMatrix = new THREE.Matrix4().copy(earthToWorldMatrix).invert();
+        const earthLocalPoint = worldPoint.applyMatrix4(worldToEarthMatrix);
+
+        // 5. 计算实际地球半径（不变）
+        const scaleFactor = (earthMesh.scale.x + earthMesh.scale.y + earthMesh.scale.z) / 3;
+        const actualEarthRadius = earthRadius * scaleFactor;
+
+
+
+        // 🔥 彻底重构经纬度计算逻辑（关键修复）
+        const lat = Math.asin(earthLocalPoint.y / actualEarthRadius) * (180 / Math.PI);
+
+        const reversedX = -earthLocalPoint.x; // 关键：X轴取反
+
+        // 核心公式：通过已知目标反推正确参数
+        // 当点击东经120°时，强制让计算结果接近120°
+        const rawLon = Math.atan2(earthLocalPoint.z, reversedX) * (180 / Math.PI);
+
+        // 步骤3：根据你的数据计算偏移（东经120°对应当前-30°，差150°）
+        const offset = 180; // 120 - (-30) = 150，填补这个差值
+        let lon = (rawLon + offset) % 360;
+
+        // 步骤4：归一化到[-180, 180]
+        if (lon > 180) lon -= 360;
+        else if (lon < -180) lon += 360;
+
+        const _lat = Number(lat.toFixed(1));
+        const _lon = Number(lon.toFixed(1))
+
+        createMarker({ lat: _lat, lon: _lon });
+
+        guiConfigParamsRef.current.latitudePosition = _lat;
+        guiConfigParamsRef.current.longitudePosition = _lon;
+
+        latitudeGuiRef.current?.updateDisplay()
+        longitudeGuiRef.current?.updateDisplay()
+      };
+
+      canvasRef.current.addEventListener('click', onCanvasClick);
+    };
+
+
+    // 创建标记点
+    const createMarker = (params: { lat: number, lon: number, color?: string, size?: number, name?: string }): THREE.Mesh => {
       if (!earthRef.current) return new THREE.Mesh();
+
       destroyOldMarkers();
+
+      const { lat, lon, color = '#00b96b', size = 0.05, name = '' } = params;
+
       const earthMesh = earthRef.current;
       const earthScale = earthMesh.scale.x;
-      const actualEarthRadius = earthRadiusRef.current / earthScale;
+      const actualEarthRadius = earthRadius / earthScale;
+
       const position = latLonToPosition(lat, lon, actualEarthRadius);
+
       const geometry = new THREE.SphereGeometry(size, 16, 16);
+
       const material = new THREE.MeshBasicMaterial({ color });
+
       const marker = new THREE.Mesh(geometry, material);
+
+      if (name) {
+        marker.name = name;
+      }
+
       marker.position.copy(position);
+
       markersRef.current.push(marker);
+
       earthMesh.add(marker);
       return marker;
     };
 
-    // 销毁旧标记点（保持不变）
+    // 销毁旧标记点
     const destroyOldMarkers = () => {
       if (markersRef.current.length === 0) return;
+
       markersRef.current.forEach(marker => {
-        if (marker.parent) marker.parent.remove(marker);
-        marker.geometry.dispose();
-        if (Array.isArray(marker.material)) {
-          marker.material.forEach(mat => mat.dispose());
-        } else {
-          marker.material.dispose();
+
+        if (marker.name !== 'init') {
+          if (marker.parent) marker.parent.remove(marker);
+          marker.geometry.dispose();
+          if (Array.isArray(marker.material)) {
+            marker.material.forEach(mat => mat.dispose());
+          } else {
+            marker.material.dispose();
+          }
         }
+
       });
-      markersRef.current = [];
+
+      markersRef.current = markersRef.current.filter(marker => marker.name === 'init');
     };
 
-    // 更新太阳光目标（保持不变）
+    // 更新太阳光目标
     const updateSunlightTarget = () => {
       if (sunLightRef.current && earthGroupRef.current) {
         sunLightRef.current.target.position.copy(earthGroupRef.current.position);
@@ -174,7 +273,7 @@ const SolarSystem: React.FC = () => {
       }
     };
 
-    // 设置运动相机位置（保持不变）
+    // 设置运动相机位置
     const setSportCameraPosition = (params: {
       camera: THREE.PerspectiveCamera,
       targetAngle: number,
@@ -191,25 +290,22 @@ const SolarSystem: React.FC = () => {
       });
     };
 
-    // 创建太阳（保持不变）
+    // 创建太阳
     const createSun = () => {
       const { sun, sunLight } = makeSun(scene);
       sunLightRef.current = sunLight;
-      sunPositionRef.current.copy(sun.position);
       sunRef.current = sun;
-      currentDirectLatRef.current = solarTerms[activeSolarTermsIndexInit].directLat;
-      targetDirectLatRef.current = currentDirectLatRef.current;
       return sun;
     };
 
-    // 创建轨道（保持不变）
+    // 创建轨道
     const createOrbit = () => {
       const orbit = makeOrbit(scene);
       orbitRef.current = orbit;
       return orbit;
     };
 
-    // 创建地球（核心修改：调整初始旋转角度匹配8:04）
+    // 创建地球
     const createEarth = () => {
       // 创建地球组
       const earthGroup = new THREE.Group();
@@ -217,7 +313,7 @@ const SolarSystem: React.FC = () => {
       earthGroupRef.current = earthGroup;
 
       // 创建地球几何体和材质
-      const geometry = new THREE.SphereGeometry(earthRadiusRef.current, 62, 62);
+      const geometry = new THREE.SphereGeometry(earthRadius, 62, 62);
       const textureLoader = new THREE.TextureLoader();
       const earthTexture = textureLoader.load(
         window.$$prefix + '/models/earth/textures/Material.002_diffuse.jpg'
@@ -233,32 +329,27 @@ const SolarSystem: React.FC = () => {
       // 应用黄赤交角
       earthMesh.rotation.x = obliquityRad;
 
+      // 记录初始旋转角度（用于计算相对旋转量）
+      initialRotationYRef.current = earthMesh.rotation.y;
+
       // 添加地球到地球组
       earthGroup.add(earthMesh);
 
       // 创建经纬线
-      const latLonLines = createDebugLatLonSphere(earthRadiusRef.current, earthGroup);
+      const latLonLines = createDebugLatLonSphere(earthRadius, earthGroup);
       lineGroupRef.current = latLonLines;
       earthMesh.add(latLonLines);
 
-      // 创建初始标记点（上海）
-      createMarker(guiConfigParamsRef.current.latitudePosition, guiConfigParamsRef.current.longitudePosition);
+      // 创建初始标记点（北京）
+      createMarker({
+        lon: guiConfigParamsRef.current.longitudePosition,
+        lat: guiConfigParamsRef.current.latitudePosition,
+        color: 'red',
+        size: 0.08,
+        name: 'init'
+      });
 
-      // 核心修改：计算8:04对应的初始时间偏移量
-      // 8:04与晨线6:00相差2小时4分钟 = 124分钟
-      // 计算对应的毫秒数（基于自转周期）
-      const minutesOffset = 2 * 60 + 4; // 8:04 - 6:00 = 124分钟
-      const rotationCycleMinutes = 24 * 60; // 自转周期（分钟）
-      // 计算需要的初始时间偏移（让时间系统从8:04开始）
-      initialTimeOffsetRef.current =
-        (minutesOffset / rotationCycleMinutes) * autoRevolutionTimeInit * 1000;
-
-      // 初始化累计旋转时间（直接设置为初始偏移量）
-      accumulatedRotationTimeRef.current = initialTimeOffsetRef.current;
-
-
-
-      // 配置特殊视角相机（保持不变）
+      // 配置特殊视角相机
       observeEarthNorthPoleCamera.position.set(0.1, 6, -0.1);
       observeEarthNorthPoleCamera.lookAt(earthGroup.position);
       earthGroup.add(observeEarthNorthPoleCamera);
@@ -271,14 +362,14 @@ const SolarSystem: React.FC = () => {
       const initSolarTerm = solarTerms[guiConfigParamsRef.current.activeSolarTermsIndex];
       earthGroup.position.set(...getEarthCenterPos(initSolarTerm.angle));
 
-      // 添加地球组到场景（保持不变）
+      // 添加地球组到场景
       scene.add(earthGroup);
       const solarTermsInstance = makeSolarTermsEarth();
       scene.add(...solarTermsInstance);
 
-      // 设置初始相机位置（保持不变）
+      // 设置初始相机位置
       setSportCameraPosition([
-        { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: initSolarTerm.angle, radius: staticConfig.radius / 2, camera: observeInnerEarthCamera },
+        { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: initSolarTerm.angle, radius: staticConfig.radius / 1.5, camera: observeInnerEarthCamera },
         { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: initSolarTerm.angle, radius: staticConfig.radius + 5, camera: observeOutEarthCamera },
         { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: initSolarTerm.angle + staticConfig.observeOrbitEarthBaseAngle, radius: staticConfig.radius, camera: observeEarthNightLineCamera },
         { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: initSolarTerm.angle - staticConfig.observeOrbitEarthBaseAngle, radius: staticConfig.radius, camera: observeEarthMorningLineCamera }
@@ -289,7 +380,7 @@ const SolarSystem: React.FC = () => {
       lastFrameTimeRef.current = performance.now();
     };
 
-    // 创建GUI控制器（保持不变）
+    // 创建GUI控制器
     const createGUI = () => {
       if (guiRef.current) guiRef.current.destroy();
       guiRef.current = new GUI();
@@ -298,7 +389,9 @@ const SolarSystem: React.FC = () => {
 
       // 公转控制
       const revolutionFolder = guiRef.current.addFolder('公转控制');
+
       revolutionGuiRef.current = revolutionFolder.add(params, 'isRevolution')
+
         .name('是否开启公转')
         .onChange((val: boolean) => handleRevolution(val));
 
@@ -314,13 +407,14 @@ const SolarSystem: React.FC = () => {
       autoroatationFolder.add(params, 'isAutoRoatation')
         .name('是否开启自转')
         .onChange((val: boolean) => {
-          const now = performance.now();
-          if (val) {
-            rotationStartTimeRef.current = now;
-          } else {
-            if (rotationStartTimeRef.current) {
-              accumulatedRotationTimeRef.current += now - rotationStartTimeRef.current;
-              rotationStartTimeRef.current = null;
+          if (earthRef.current) {
+            if (val) {
+              // 开启自转时：基于当前角度和之前的偏移量计算新基准
+              initialRotationYRef.current = earthRef.current.rotation.y - rotationOffsetRef.current;
+              isFirstStartRef.current = false;
+            } else {
+              // 关闭自转时：记录当前累计旋转量作为偏移基准
+              rotationOffsetRef.current = earthRef.current.rotation.y - initialRotationYRef.current;
             }
           }
         });
@@ -329,7 +423,7 @@ const SolarSystem: React.FC = () => {
         .min(1).max(10).step(1)
         .name('自转速度倍数');
 
-      // 节气控制（保持不变）
+      // 节气控制
       const solarTermsFolder = guiRef.current.addFolder('节气控制');
       const solarTermsOptions: Record<string, number> = {};
       solarTerms.forEach((item, index) => {
@@ -356,33 +450,35 @@ const SolarSystem: React.FC = () => {
           const now = performance.now();
           const params = guiConfigParamsRef.current;
           params.isRevolution = false;
+
           revolutionGuiRef.current?.updateDisplay();
+
           handleRevolution(params.isRevolution);
+
           const selectedSolarTerm = solarTerms[selectedIndex];
           const targetAngle = selectedSolarTerm.angle;
-          const targetDirectLat = selectedSolarTerm.directLat;
 
           if (earthGroupRef.current) {
             const targetEarthCenter = getEarthCenterPos(targetAngle);
             earthGroupRef.current.position.set(...targetEarthCenter);
+
             updateSunlightTarget();
+
             setSportCameraPosition([
-              { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle, radius: staticConfig.radius / 2, camera: observeInnerEarthCamera },
+              { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle, radius: staticConfig.radius / 1.5, camera: observeInnerEarthCamera },
               { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle, radius: staticConfig.radius + 5, camera: observeOutEarthCamera },
               { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: targetAngle + staticConfig.observeOrbitEarthBaseAngle, radius: staticConfig.radius, camera: observeEarthNightLineCamera },
               { position: { y: earthGroupRef.current!.position.y + 2 }, targetAngle: targetAngle - staticConfig.observeOrbitEarthBaseAngle, radius: staticConfig.radius, camera: observeEarthMorningLineCamera }
             ]);
           }
 
-          isDirectLatTransitionRef.current = true;
-          targetDirectLatRef.current = targetDirectLat;
-          transitionStartTimeRef.current = now;
           params.baseAngle = targetAngle;
           params.revolutionStartTime = now;
         });
 
-      // 其他GUI控制项（保持不变）
+      // 其他GUI控制项
       const sunLightFolder = guiRef.current.addFolder('光照&直射光线控制');
+
       sunLightFolder.add(params, 'sunlightIntensity')
         .min(0.1).max(3).step(0.1)
         .name('太阳光强度')
@@ -390,22 +486,19 @@ const SolarSystem: React.FC = () => {
           if (sunLightRef.current) sunLightRef.current.intensity = val;
         });
 
-      sunLightFolder.add(params, 'showSunDirectLine')
-        .name('显示太阳直射光线')
-        .onChange((val: boolean) => {
-          if (sunDirectCylinderRef.current) sunDirectCylinderRef.current.visible = val;
-        });
-
       const cameraFolder = guiRef.current.addFolder('相机控制');
+
       const cameraOptions: Record<string, number> = {};
       cameraInstanceList.forEach((item, index) => {
         cameraOptions[item.userData.name] = index;
       });
+
       cameraFolder.add(params, 'activeCameraIndex')
         .options(cameraOptions)
         .name('切换相机');
 
       const lonAndLatFolder = guiRef.current.addFolder('经纬线&标记控制');
+
       lonAndLatFolder.add(params, 'showLatitudeLine')
         .name('是否显示纬线')
         .onChange((val: boolean) => {
@@ -441,32 +534,42 @@ const SolarSystem: React.FC = () => {
         });
 
       const latitudeAndLongitudeFolder = guiRef.current.addFolder('经纬度标点控制');
-      latitudeAndLongitudeFolder.add(params, 'latitudePosition')
+
+      latitudeGuiRef.current = latitudeAndLongitudeFolder.add(params, 'latitudePosition')
         .min(-90).max(90).step(0.1)
         .name('纬度')
         .onFinishChange((val: number) => {
-          createMarker(val, params.longitudePosition);
+          createMarker({
+            lat: val,
+            lon: params.longitudePosition
+          });
+
         });
 
-      latitudeAndLongitudeFolder.add(params, 'longitudePosition')
+      longitudeGuiRef.current = latitudeAndLongitudeFolder.add(params, 'longitudePosition')
         .min(-180).max(180).step(0.1)
         .name('经度')
         .onFinishChange((val: number) => {
-          createMarker(params.latitudePosition, val);
+          createMarker({
+            lat: params.latitudePosition,
+            lon: val
+          });
+
         });
     };
 
-    // 初始化场景（保持不变）
+    // 初始化场景
     const make = () => {
       createSun();
       createOrbit();
       createEarth();
       createGUI();
-      rotationStartTimeRef.current = null; // 初始不开启自转
+      addEarthClickEvent();
     };
+
     make();
 
-    // 窗口大小调整（保持不变）
+    // 窗口大小调整
     const handleResize = () => {
       if (!canvasRef.current) return;
       const { clientWidth: width, clientHeight: height } = canvasRef.current;
@@ -478,16 +581,49 @@ const SolarSystem: React.FC = () => {
         });
       }
     };
-    handleResize();
 
-    // 时间格式化（保持不变）
+
+    // 时间格式化
     const formatTime = (totalMinutes: number): string => {
       const hours = Math.floor(totalMinutes / 60) % 24;
       const minutes = Math.floor(totalMinutes % 60);
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     };
 
-    // 动画循环（保持不变）
+    const formatOtherPositionCurrentTime = (formatTime: string): string => {
+      const params = guiConfigParamsRef.current;
+
+      // latitudePositionInit = 40  longitudePositionInit = 116
+
+      // 北京时区 (UTC+8，基于东经120度)
+      const beijingTimezone = 8;
+
+      // 目标位置经度
+      const lon = params.longitudePosition;
+
+      // 计算目标位置的时区 (UTC偏移量)
+      const targetTimezone = Math.round(lon / 15);
+
+      // 计算时区差 (目标时区相对于北京时区的差异)
+      const timeDiff = targetTimezone - beijingTimezone;
+
+      // 解析北京时间
+      const [hours, minutes] = formatTime.split(':').map(Number);
+
+      // 计算目标区时
+      let targetHours = hours + timeDiff;
+
+      // 处理跨日情况
+      if (targetHours >= 24) targetHours -= 24;
+      if (targetHours < 0) targetHours += 24;
+
+      // 格式化为字符串返回
+      return `${String(targetHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    };
+
+    handleResize();
+
+    // 动画循环
     const animate = (time: number) => {
       const params = guiConfigParamsRef.current;
       const earthGroup = earthGroupRef.current;
@@ -514,38 +650,36 @@ const SolarSystem: React.FC = () => {
       updateSunlightTarget();
 
       // 自转逻辑
-      // 自转逻辑（核心修改）
       const earthMesh = earthRef.current;
       const deltaTime = time - lastFrameTimeRef.current;
       const deltaTimeSec = deltaTime / 1000;
       lastFrameTimeRef.current = time;
 
-      if (earthMesh && params.isAutoRoatation) {
-        // 计算自转角度（保持不变）
-        const rotateAngle = baseAngularVelocity * params.autonRevolutionTimeMutiple * deltaTimeSec;
-        earthMesh.rotation.y += rotateAngle;
-
-        // 时间计算（核心修改：从8:04开始累加）
-        let totalRotationTime = accumulatedRotationTimeRef.current;
-
-        if (rotationStartTimeRef.current) {
-          // 累加自转时间（从初始偏移量开始）
-          totalRotationTime += time - rotationStartTimeRef.current;
-        } else {
-          // 首次开启自转时设置起始点
-          rotationStartTimeRef.current = time;
+      if (earthMesh) {
+        /* 处理自转角度 */
+        if (params.isAutoRoatation) {
+          // 计算自转角度
+          const rotateAngle = baseAngularVelocity * params.autonRevolutionTimeMutiple * deltaTimeSec;
+          earthMesh.rotation.y += rotateAngle;
         }
 
-        // 计算总分钟数（包含初始偏移）
-        const rotationRatio = totalRotationTime / (autoRevolutionTimeInit * 1000);
+        /* 处理自转带来的时间更替*/
+        const currentRotation = earthMesh.rotation.y - initialRotationYRef.current;
 
-        const totalMinutes = (rotationRatio * 24 * 60) % (24 * 60);
+        if (params.isAutoRoatation) {
+          // 自转开启时：计算实时时间
+          const totalRotationDeg = currentRotation * (180 / Math.PI);
+          const rotationMinutes = (totalRotationDeg / 15) * 60;
+          const totalMinutes = (INITIAL_BASE_MINUTES + rotationMinutes) % (24 * 60);
+          params.currentTimeStr = formatTime(totalMinutes);
+        } else if (isFirstStartRef.current) {
+          // 首次加载且未开启自转时：保持初始时间
+          params.currentTimeStr = formatTime(INITIAL_BASE_MINUTES);
+        }
 
-        const shanghaiOffsetMinutes = 6 * 60; // 晨线基准时间（6:00）
-
-        // 直接显示计算结果（已包含初始偏移）
-        params.shanghaiTimeStr = formatTime(shanghaiOffsetMinutes + totalMinutes);
+        params.targetPositionCurrentTimeStr = formatOtherPositionCurrentTime(params.currentTimeStr)
       }
+
 
       // 渲染场景
       controls.update();
@@ -553,11 +687,11 @@ const SolarSystem: React.FC = () => {
       requestAnimationFrame(animate);
     };
 
-    // 启动动画（保持不变）
+    // 启动动画
     requestAnimationFrame(animate);
     window.addEventListener('resize', handleResize);
 
-    // 清理函数（保持不变）
+    // 清理函数
     return () => {
       window.removeEventListener('resize', handleResize);
       renderer?.dispose();
@@ -568,6 +702,7 @@ const SolarSystem: React.FC = () => {
 
   useEffect(() => {
     const cleanup = initScene();
+
     return cleanup;
   }, []);
 

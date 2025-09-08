@@ -16,10 +16,19 @@ export const activeSolarTermsIndexInit = 0;
 export const activeCameraIndexInit = 0;
 
 /* 自转一圈时间 */
-export const autoRevolutionTimeInit = (revolutionTimeInit / 365) * 50; // 0.1秒/圈
+export const autoRevolutionTimeInit = (revolutionTimeInit / 365) * 100; // 0.1秒/圈 * 50 = 5s一圈
 
 // 新增：自转相关计算参数
 export const baseAngularVelocity = (2 * Math.PI) / autoRevolutionTimeInit; // 基础角速度(rad/s) 5s转一圈
+
+export const latitudePositionInit = 40   // 北京纬度
+export const longitudePositionInit = 116  // 北京经度
+/* export const longitudePositionTimeInit = 120  // 北京区时 */
+export const currentTimeStrInit = '08:00'   // 初始北京时间
+
+// 新增：初始时间基准（8:00对应的分钟数）
+export const INITIAL_BASE_MINUTES_INIT = 8 * 60; // 8:00 = 480分钟
+
 
 // 节气配置（包含直射纬度）
 export const solarTerms = [
