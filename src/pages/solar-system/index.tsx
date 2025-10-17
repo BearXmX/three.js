@@ -177,8 +177,6 @@ const SolarSystem: React.FC = () => {
         const scaleFactor = (earthMesh.scale.x + earthMesh.scale.y + earthMesh.scale.z) / 3;
         const actualEarthRadius = earthRadius * scaleFactor;
 
-
-
         // 🔥 彻底重构经纬度计算逻辑（关键修复）
         const lat = Math.asin(earthLocalPoint.y / actualEarthRadius) * (180 / Math.PI);
 

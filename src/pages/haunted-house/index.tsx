@@ -215,6 +215,8 @@ const HauntdHouse: React.FC<HauntdHousePropsType> = (props) => {
       }
     };
 
+    handleResize()
+
     function render(time: number) {
       const seconds = time * 0.001;
 

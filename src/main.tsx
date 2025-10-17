@@ -20,6 +20,7 @@ import CameraFollow from './pages/camera-follow/index.tsx'
 import HauntdHouse from './pages/haunted-house/index.tsx'
 import Star from './pages/star-river/index.tsx'
 import StarRiver from './pages/star-river/index.tsx'
+import RunningMan from './pages/running-man/index.tsx'
 
 export const links = [
   {
@@ -174,6 +175,17 @@ export const links = [
     element: (
       <Enhance>
         <StarRiver key={'/star-river'}></StarRiver>
+      </Enhance>
+    ),
+  },
+  {
+    name: '奔跑吧！兄弟',
+    path: '/running-man',
+    content: `奔跑吧！兄弟`
+    ,
+    element: (
+      <Enhance>
+        <RunningMan key={'/running-man'}></RunningMan>
       </Enhance>
     ),
   },
