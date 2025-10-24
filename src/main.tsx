@@ -21,7 +21,8 @@ import HauntdHouse from './pages/haunted-house/index.tsx'
 import Star from './pages/star-river/index.tsx'
 import StarRiver from './pages/star-river/index.tsx'
 import RunningMan from './pages/running-man/index.tsx'
-
+import RunningMan2 from './pages/running-man2/index.tsx'
+import EarthConstruct from './pages/earth-construct/index.tsx'
 export const links = [
   {
     name: '旋转的立方体',
@@ -188,6 +189,29 @@ export const links = [
         <RunningMan key={'/running-man'}></RunningMan>
       </Enhance>
     ),
+  },
+  {
+    name: '奔跑吧！兄弟2',
+    path: '/running-man2',
+    content: `奔跑吧！兄弟2`
+    ,
+    element: (
+      <Enhance>
+        <RunningMan2 key={'/running-man2'}></RunningMan2>
+      </Enhance>
+    ),
+  },
+  {
+    name: '地球的构造',
+    path: '/earth-construct',
+    content: `地球的构造`
+    ,
+    element: (
+      <Enhance>
+        <EarthConstruct key={'/earth-construct'}></EarthConstruct>
+      </Enhance>
+    ),
+
   },
 ]
 

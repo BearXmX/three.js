@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as THREE from 'three'
-
+import { Water } from 'three/examples/jsm/objects/Water.js'
+import { Sky } from 'three/examples/jsm/objects/Sky.js'
 type PointPlanePropsType = {
 
 }
@@ -15,10 +16,10 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
     const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas.current! })
 
     rendererRef.current = renderer
-
-
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.localClippingEnabled = true;
     // 视角
-    const fov = 45
+    const fov = 75
 
     // 宽高比
     const aspect = window.innerWidth / window.innerHeight  // the canvas default
@@ -32,9 +33,9 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
     // 相机
     const camera = new THREE.PerspectiveCamera(fov, aspect, near, far)
 
-    camera.position.z = 20
+    camera.position.z = 5
 
-    camera.position.x = 5
+    camera.position.x = 0
 
     camera.position.y = 5
 
@@ -42,15 +43,15 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
     const scene = new THREE.Scene()
 
     const color = '#ffffff'
-
-    const intensity = 10
-
-    // 定向光源
-    const light = new THREE.DirectionalLight(color, intensity)
-
-    // z为负数，表示光源朝向负z轴（背面）
-    light.position.set(0, 1, 1)
-    scene.add(light)
+    /* 
+        const intensity = 10
+    
+        // 定向光源
+        const light = new THREE.DirectionalLight(color, intensity)
+    
+        // z为负数，表示光源朝向负z轴（背面）
+        light.position.set(0, 1, 1)
+        scene.add(light) */
 
 
     // 添加世界坐标辅助器
@@ -69,154 +70,60 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
     // controls.autoRotate = true
 
 
+    const light = new THREE.HemisphereLight(0xffffff, 0x080808, 4.5);
+    light.position.set(- 1.25, 1, 1.25);
+    scene.add(light);
 
-    // 绘制地面
-    {
-      const planeSize = 40;
-      const loader = new THREE.TextureLoader();
-      const texture = loader.load(window.$$prefix + '/checker.png');
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.magFilter = THREE.NearestFilter;
-      texture.colorSpace = THREE.SRGBColorSpace;
-      const repeats = planeSize / 2;
-      texture.repeat.set(repeats, repeats);
 
-      const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
 
-      const planeMat = new THREE.MeshPhongMaterial({
-        map: texture,
+    //
+
+    const clipPlanes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),
+      new THREE.Plane(new THREE.Vector3(0, - 1, 0), 0),
+      new THREE.Plane(new THREE.Vector3(0, 0, - 1), 0)
+    ];
+
+
+    const params = {
+      clipIntersection: true,
+      planeConstant: 0,
+      showHelpers: false,
+      alphaToCoverage: true,
+    };
+
+
+    const group = new THREE.Group();
+
+    for (let i = 1; i <= 30; i += 5) {
+
+      console.log(i);
+
+
+      const geometry = new THREE.SphereGeometry(i / 30, 48, 24);
+
+      const material = new THREE.MeshPhongMaterial({
+
+        color: new THREE.Color().setHSL(Math.random(), 0.5, 0.5, THREE.SRGBColorSpace),
         side: THREE.DoubleSide,
+        clippingPlanes: clipPlanes,
+        clipIntersection: params.clipIntersection,
+        alphaToCoverage: true,
       });
+      group.add(new THREE.Mesh(geometry, material));
 
-      const mesh = new THREE.Mesh(planeGeo, planeMat);
-      mesh.rotation.x = Math.PI * - .5;
-      scene.add(mesh);
     }
 
+    scene.add(group);
 
-    // 自定义屏幕图形
+    // helpers
 
-    const params = [
-
-      /* 这个是背面的三角形 */
-      /*       {
-              vertices: [
-                0, 0, -2,
-                0, 0, -4,
-                0, 2, -3,
-              ],
-              color: '#ff0000',
-              split: 3
-            }, */
-
-
-      {
-        vertices: [
-          -1, -1, 0,
-          1, -1, 0,
-          0, 1, 1,
-        ],
-        color: '#00b96b',
-        split: 3
-      },
-      {
-        vertices: [
-          -1, -1, 2,
-          1, -1, 2,
-          0, 1, 1,
-        ],
-        color: '#4a208e',
-        split: 3
-      },
-      {
-        vertices: [
-          -1, -1, 0,
-          1, -1, 0,
-          0, -3, 1,
-        ],
-        color: '#40a9ff',
-        split: 3
-      },
-
-      {
-        vertices: [
-          -1, -1, 2,
-          1, -1, 2,
-          0, -3, 1,
-        ],
-        color: '#df17aa',
-        split: 3
-      },
-
-      {
-        vertices: [
-          1, -1, 0,
-          1, -1, 2,
-          0, 1, 1,
-        ],
-        color: '#b70514',
-        split: 3
-      },
-
-      {
-        vertices: [
-          1, -1, 0,
-          1, -1, 2,
-          0, -3, 1,
-        ],
-        color: '#89c73c',
-        split: 3
-      },
-
-      {
-        vertices: [
-          -1, -1, 0,
-          -1, -1, 2,
-          0, -3, 1,
-        ],
-        color: '#212bd9',
-        split: 3
-      },
-
-      {
-        vertices: [
-          -1, -1, 0,
-          -1, -1, 2,
-          0, 1, 1,
-        ],
-        color: '#dc691d',
-        split: 3
-      },
-    ]
-
-    const group = new THREE.Group()
-
-    const planeInstance = params.map(item => {
-      const geometry = new THREE.BufferGeometry()
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(item.vertices), item.split))
-
-      const material = new THREE.MeshBasicMaterial({
-        color: item.color,
-        // 控制是否两面绘制
-        side: THREE.DoubleSide,
-
-        // 控制线框展示
-        wireframe: false,
-      })
-
-      const mesh = new THREE.Mesh(geometry, material)
-
-
-
-      group.add(mesh)
-
-      return mesh
-    })
-
-    scene.add(group)
-
+    const helpers = new THREE.Group();
+    helpers.add(new THREE.PlaneHelper(clipPlanes[0], 2, 0xff0000));
+    helpers.add(new THREE.PlaneHelper(clipPlanes[1], 2, 0x00ff00));
+    helpers.add(new THREE.PlaneHelper(clipPlanes[2], 2, 0x0000ff));
+    helpers.visible = false
+    scene.add(helpers);
 
     // 窗口大小调整
     const handleResize = () => {
@@ -229,6 +136,8 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
       }
     };
 
+    handleResize()
+
     function render(time: number) {
       if (!canvas.current) return;
 
@@ -236,15 +145,7 @@ const PointPlane: React.FC<PointPlanePropsType> = (props) => {
 
       const seconds = time * 0.001; // 将毫秒转换为秒
 
-      group.position.z = -(seconds * Math.PI / 180 * 50)
 
-      controls.target.z = group.position.z + 2
-
-      camera.position.x = 0
-
-      camera.position.y = group.position.y + 2
-
-      camera.position.z = group.position.z + 4
 
       renderer.render(scene, camera)
 

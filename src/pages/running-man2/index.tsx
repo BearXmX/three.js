@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import * as CANNON from 'cannon-es'
-import { Water } from 'three/examples/jsm/objects/Water.js'
+
 const RunningMan: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -18,7 +18,7 @@ const RunningMan: React.FC = () => {
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x87ceeb)
 
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000)
     camera.position.set(0, 3, 6)
 
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -27,40 +27,21 @@ const RunningMan: React.FC = () => {
     controls.maxPolarAngle = Math.PI / 2.05
     controls.enablePan = false
 
-    scene.add(new THREE.AmbientLight('#ffff', 0.6))
-    const dirLight = new THREE.DirectionalLight('#777777ff', 1)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1)
     dirLight.position.set(10, 10, 5)
     scene.add(dirLight)
-
-    /*     generateField()
-    
-        scene.add(generateField()) */
-
-
-    /*     const terrainMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(30, 30, 32, 32),
-          new THREE.MeshStandardMaterial({ color: '#88aa66' })
-        )
-        terrainMesh.rotation.x = -Math.PI / 2
-        terrainMesh.position.set(10, 0, 10)
-        scene.add(terrainMesh) */
-
-
-
-
 
     /** ===== Cannon.js 世界 ===== */
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) })
 
     /** ===== 球体 ===== */
-    const sphereRadius = 1
+    const sphereRadius = 0.5
     const sphereGeo = new THREE.SphereGeometry(sphereRadius, 32, 32)
-    const sphereMat = new THREE.MeshPhongMaterial({ color: 0xff0000, })
+    const sphereMat = new THREE.MeshPhongMaterial({ color: 0xff0000 })
     const sphere = new THREE.Mesh(sphereGeo, sphereMat)
-    sphere.position.set(16, 0, 5)
     scene.add(sphere)
 
-    /** 球体虚拟刚体（用于检测障碍物） */
     const sphereBody = new CANNON.Body({
       mass: 1,
       shape: new CANNON.Sphere(sphereRadius),
@@ -72,51 +53,112 @@ const RunningMan: React.FC = () => {
 
     /** ===== 树（圆柱+圆锥） ===== */
     const obstacles: CANNON.Body[] = []
-    /*     for (let i = 0; i < 50; i++) {
-          let x = 0,
-            z = 0
-          while (Math.sqrt(x * x + z * z) < 5) {
-            x = (Math.random() - 0.5) * 100
-            z = (Math.random() - 0.5) * 100
-          }
-          const trunkH = 0.8 + Math.random() * 1
-          const crownH = 1.2 + Math.random() * 1
-          const crownR = 0.6 + Math.random() * 0.5
-    
-          // 树干
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, trunkH, 8), new THREE.MeshPhongMaterial({ color: 0x8b4513 }))
-          trunk.position.set(x, trunkH / 2, z)
-          scene.add(trunk)
-    
-          // 树冠
-          const crown = new THREE.Mesh(new THREE.ConeGeometry(crownR, crownH, 8), new THREE.MeshPhongMaterial({ color: 0x228b22 }))
-          crown.position.set(x, trunkH + crownH / 2, z)
-          scene.add(crown)
-    
-          // 计算整个树的包围盒
-          const box = new THREE.Box3()
-          box.expandByObject(trunk)
-          box.expandByObject(crown)
-          const size = new THREE.Vector3()
-          const center = new THREE.Vector3()
-          box.getSize(size)
-          box.getCenter(center)
-    
-          // 创建碰撞体
-          const body = new CANNON.Body({
-            mass: 0,
-            shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)),
-            position: new CANNON.Vec3(center.x, center.y, center.z),
-          })
-          world.addBody(body)
-          obstacles.push(body)
-        } */
+    for (let i = 0; i < 50; i++) {
+      let x = 0, z = 0
+      while (Math.sqrt(x * x + z * z) < 5) {
+        x = (Math.random() - 0.5) * 100
+        z = (Math.random() - 0.5) * 100
+      }
+      const trunkH = 0.8 + Math.random() * 1
+      const crownH = 1.2 + Math.random() * 1
+      const crownR = 0.6 + Math.random() * 0.5
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, trunkH, 8), new THREE.MeshPhongMaterial({ color: 0x8b4513 }))
+      trunk.position.set(x, trunkH / 2, z)
+      scene.add(trunk)
+
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(crownR, crownH, 8), new THREE.MeshPhongMaterial({ color: 0x228b22 }))
+      crown.position.set(x, trunkH + crownH / 2, z)
+      scene.add(crown)
+
+      const box = new THREE.Box3()
+      box.expandByObject(trunk)
+      box.expandByObject(crown)
+      const size = new THREE.Vector3()
+      const center = new THREE.Vector3()
+      box.getSize(size)
+      box.getCenter(center)
+
+      const body = new CANNON.Body({
+        mass: 0,
+        shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)),
+        position: new CANNON.Vec3(center.x, center.y, center.z),
+      })
+      world.addBody(body)
+      obstacles.push(body)
+    }
 
     /** ===== GLB 地形 ===== */
-    /** ===== GLB 地形与墙体刚体 ===== */
     let terrain: THREE.Object3D | null = null
-    const loader = new GLTFLoader()
 
+    {
+      // 生成一个不规则的曲线墙体
+      // ===== 生成不规则曲线墙体 =====
+      {
+        const points = [{ x: 0, z: 0 }, { x: 2, z: 1 }, { x: 4, z: 0 }, { x: 6, z: 2 }, { x: 50, z: 0 }]
+        for (let i = 0; i < points.length - 1; i++) {
+          const p1 = points[i], p2 = points[i + 1]
+          const dx = p2.x - p1.x, dz = p2.z - p1.z
+          const length = Math.sqrt(dx * dx + dz * dz)
+          const box = new THREE.Mesh(new THREE.BoxGeometry(length, 2, 0.5), new THREE.MeshPhongMaterial({ color: 'green' }))
+          box.position.set((p1.x + p2.x) / 2, 1, (p1.z + p2.z) / 2)
+          const angle = Math.atan2(dz, dx)
+          box.rotation.y = -angle
+          scene.add(box)
+
+          const body = new CANNON.Body({ mass: 0 })
+          body.addShape(new CANNON.Box(new CANNON.Vec3(length / 2, 1, 0.25)))
+          body.position.set(box.position.x, box.position.y, box.position.z)
+          body.quaternion.setFromEuler(box.rotation.x, box.rotation.y, box.rotation.z)
+          world.addBody(body)
+          obstacles.push(body)
+
+        }
+      }
+    }
+
+    {
+
+      // 增加厚度的曲线墙
+      const wallPoints: THREE.Vector3[] = []
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-5, 0, -5),
+        new THREE.Vector3(-2, 0, 0),
+        new THREE.Vector3(2, 0, 2),
+        new THREE.Vector3(5, 0, 5)
+      ])
+      const points = curve.getPoints(20)
+
+      const wallHeight = 2
+      const wallThickness = 0.5
+      points.forEach((p, i) => {
+        if (i < points.length - 1) {
+          const next = points[i + 1]
+          const dir = new THREE.Vector3().subVectors(next, p)
+          const length = dir.length()
+          dir.normalize()
+
+          // Box 沿两点方向放置，长度=段长，厚度=wallThickness
+          const angle = Math.atan2(dir.z, dir.x)
+          const wallGeom = new THREE.BoxGeometry(length, wallHeight, wallThickness)
+          const wallMesh = new THREE.Mesh(wallGeom, new THREE.MeshPhongMaterial({ color: '#00b96b' }))
+
+          wallMesh.position.set((p.x + next.x) / 2, wallHeight / 2, (p.z + next.z) / 2)
+          wallMesh.rotation.y = -angle
+          scene.add(wallMesh)
+
+          // 对应刚体
+          const body = new CANNON.Body({ mass: 0 })
+          const halfExtents = new CANNON.Vec3(length / 2, wallHeight / 2, wallThickness / 2)
+          body.addShape(new CANNON.Box(halfExtents))
+          body.position.set(wallMesh.position.x, wallMesh.position.y, wallMesh.position.z)
+          body.quaternion.setFromEuler(0, wallMesh.rotation.y, 0)
+          world.addBody(body)
+          obstacles.push(body)
+        }
+      })
+
+    }
 
     /**
  * 将 THREE.Mesh 转成 Cannon.js 静态刚体（Trimesh）
@@ -163,109 +205,52 @@ const RunningMan: React.FC = () => {
     }
 
 
-    // ✅ 工具函数：把 THREE.Geometry 转成 Cannon Trimesh
-    function createTrimesh(geometry: THREE.BufferGeometry) {
-      const pos = geometry.attributes.position
-      const vertices: number[] = []
-      for (let i = 0; i < pos.count; i++) {
-        vertices.push(pos.getX(i), pos.getY(i), pos.getZ(i))
-      }
-
-      const index = geometry.index ? Array.from(geometry.index.array) : undefined
-      return new CANNON.Trimesh(vertices, index as any)
-    }
-
-    const treeKeys = ['Mesh221_1', 'Mesh220_3', 'Mesh242_1', 'Mesh237_3', 'Mesh131_3', 'Mesh228_2', 'Mesh227_2', 'Mesh130_3', 'Mesh235_1']
-    const wallKeys = ['Mesh87', 'Mesh48', 'Mesh52', 'Mesh53']
-
-
-    let waters = [] as THREE.Mesh[]
-
-    const grassList = [] as THREE.Mesh[]
+    const loader = new GLTFLoader()
 
     loader.load(
-      window.$$prefix + '/models/running/1020test(1).glb',
+      window.$$prefix + '/models/running/running.glb',
       gltf => {
         terrain = gltf.scene
         terrain.position.set(0, 0, 0)
         scene.add(terrain)
+        const wallKeys = [] as any[]// 特殊 Mesh 名称
 
         terrain.traverse(obj => {
-          if (!(obj instanceof THREE.Mesh)) return
-
-          // ✅ 普通障碍（Mesh220_3等）
-
-          //   treeKeys.includes(obj.name)
-          if (
-            obj.name.startsWith('col_')
-          ) {
+          if (obj instanceof THREE.Mesh) {
             const box = new THREE.Box3().setFromObject(obj)
             const size = new THREE.Vector3()
             const center = new THREE.Vector3()
             box.getSize(size)
             box.getCenter(center)
 
-            const body = new CANNON.Body({
-              mass: 0,
-              shape: new CANNON.Box(new CANNON.Vec3(size.x, size.y, size.z)),
-              position: new CANNON.Vec3(center.x, center.y, center.z),
-            })
-            world.addBody(body)
-            obstacles.push(body)
+            let body: CANNON.Body
+
+            if (obj instanceof THREE.Mesh && obj.material?.name === '01010101') {
+              body = new CANNON.Body({
+                mass: 0,
+                shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)),
+                position: new CANNON.Vec3(center.x, center.y, center.z),
+              })
+              world.addBody(body)
+              obstacles.push(body)
+            }
+
+            if (obj instanceof THREE.Mesh && obj?.name === 'mesh_0_5') {
+
+              const wallMesh: THREE.Mesh = obj // 你的不规则墙体 Mesh
+              const wallBody = meshToTrimeshBody(wallMesh)
+              world.addBody(wallBody)
+              obstacles.push(wallBody)
+            }
           }
-
-          // ✅ 特殊处理：Mesh114（曲面墙 → Trimesh 刚体）
-          if (wallKeys.includes(obj.name)) {
-
-            const shape = createTrimesh(obj.geometry)
-
-            const wallBody = new CANNON.Body({
-              mass: 0, // 静态刚体
-              shape,
-            })
-
-            // 设置刚体的位置、旋转与 Mesh 一致
-            wallBody.position.copy(obj.position as any)
-            wallBody.quaternion.copy(obj.quaternion as any)
-
-            world.addBody(wallBody)
-            obstacles.push(wallBody)
-          }
-
-          if (obj.material.name.includes('water')) {
-
-            obj.visible = false
-
-            const sun = new THREE.Vector3(1, 1, 10)
-
-            const water = new Water(obj.geometry, {
-              waterNormals: new THREE.TextureLoader().load('/water.jpg', function (texture) {
-                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-              }),
-              sunDirection: sun,
-              sunColor: '#b4b4b477',
-              waterColor: '#001e0f',
-            })
-            waters.push(water)
-            scene.add(water)
-          }
-
-          if (obj instanceof THREE.Mesh && obj.material.name.includes('grass_')) {
-            grassList.push(obj)
-
-            obj.material.wireframe = true
-          }
-
         })
       },
       undefined,
       err => console.error('GLB加载失败:', err)
     )
 
-
     /** ===== 键盘控制 ===== */
     const move = { forward: 0, backward: 0, left: 0, right: 0 }
-
 
     window.addEventListener('keydown', e => {
       if (e.key === 'w') move.forward = 1
@@ -285,25 +270,15 @@ const RunningMan: React.FC = () => {
     const down = new THREE.Vector3(0, -1, 0)
 
     /** ===== 动画循环 ===== */
-    const cameraOffset = new THREE.Vector3(0, 12, 15)
-    const speed = 30
-    /*     const { updateGrass } = createDynamicGrass(scene, sphere) */
+    const cameraOffset = new THREE.Vector3(0, 1.5, 3)
+    const speed = 5
+
+
     const animate = () => {
       requestAnimationFrame(animate)
 
-      grassList.forEach(item => {
-        // @ts-ignore
-        /*         item.material.uniforms.time.value = performance.now() / 1000 */
-      })
-
-
-      waters.forEach(water => {
-        // @ts-ignore
-        water.material.uniforms.time.value += 0.01
-      })
       // 水平移动
       const dir = new THREE.Vector3(move.right - move.left, 0, move.backward - move.forward)
-
       if (dir.lengthSq() > 0) {
         dir.normalize()
         const camDir = new THREE.Vector3()
@@ -319,7 +294,7 @@ const RunningMan: React.FC = () => {
         sphereBody.velocity.x = moveVec.x
         sphereBody.velocity.z = moveVec.z
 
-        /*         updateGrass() */
+
       } else {
         sphereBody.velocity.x = 0
         sphereBody.velocity.z = 0
