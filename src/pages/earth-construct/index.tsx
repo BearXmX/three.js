@@ -482,7 +482,7 @@ const EarthConstruct: React.FC<EarthConstructPropsType> = (props) => {
         const sun = new THREE.Vector3(2, 4, 1).add(box.position);
 
         const ocean = new Water(new THREE.BoxGeometry(oceanWidth, oceanHeight, oceanDepth), {
-          waterNormals: new THREE.TextureLoader().load('/water.jpg', function (texture) {
+          waterNormals: new THREE.TextureLoader().load(window.$$prefix + '/water.jpg', function (texture) {
             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
           }),
           sunDirection: sun,
